@@ -1,7 +1,10 @@
-from bottle import route, run, template, abort
+from bottle import route, run, template, abort, request
 import requests
 from bs4 import BeautifulSoup
+import json
 
+
+FILENAME = 'subscriptions.json'
 
 @route('/')
 def index():
@@ -10,6 +13,8 @@ def index():
     <a href='category/2'>Детские больницы</a><br>
     <a href='category/3'>Стоматологии</a><br>
     <a href='category/4'>Диспансеры и спецучереждения</a>
+    <br><br>
+    <a href='subscriptions'>Текущие подписки</a>
     """
     return index_page
 
@@ -25,13 +30,16 @@ def categories(index):
             if href and 'obj='in href:
                 links.append((href[5:], link.b.text))
         cat_page = """
+        <a href='{{back}}'> Назад</a><br><br>
+
         <ul>
         % for item in name:
             <li><a href='/hospital/{{item[0]}}'> {{item[1]}}</a></li>
         % end
         </ul>
         """
-        return template(cat_page, name=links)
+        back = request.get_header('Referer')
+        return template(cat_page, name=links, back=back)
     else:
         abort("!!!")
 
@@ -50,37 +58,71 @@ def hospital(index):
             except AttributeError:
                 pass
             if 'Номерков нет' in str(c):
-                continue
+                doc = all_doctors.setdefault(category, {})
+                doc[c.b.text] = (index, '0')
             if 'Всего номерков' in str(c):
                 doc = all_doctors.setdefault(category, {})
                 doc[c.b.text] = (c.find_all('a')[1].attrs['href'], c.find_all('a')[1].u.text)
         hosp_page = """
+        <a href='{{back}}'> Назад</a><br><br>
+
         <ul>
         % for item in name:
             <li>{{item}}</li>
                 <ul>
                 % for doc in name[item]:
+                    % if name[item][doc][1] == '0':
+                    <li><form action='/subscribe' method="post">
+                    {{doc}}
+                     <input type="hidden" name="doctor" value="{{doc}}">
+                     <input type="hidden" name="hospital" value="{{name[item][doc][0]}}">
+                    <input type="submit" value="Подписаться">
+                    </form></li>
+                    % else:
                     <li><a href='http://igis.ru/online{{name[item][doc][0]}}'>{{doc}}</a> {{name[item][doc][1]}}</li>
+                    % end
                 % end
                 </ul>
 
         % end
         </ul>
         """
-                # <li><a href='{{name[item][0]}}'> {{item}}</a></li>
-        return template(hosp_page, name=all_doctors)
+        back = request.get_header('Referer')
+        return template(hosp_page, name=all_doctors, back=back)
     else:
         abort("!!!")
 
 
 @route('/subscriptions')
 def subscriptions():
-    name = 1
-    return template('<b>Hello {{name}}</b>!', name=name)
+    try:
+        with open(FILENAME) as f:
+            subs = json.load(f)
+    except IOError:
+        subs = {}
+    return template('<b>Подписки {{name}}</b>!', name=subs)
 
 
 @route('/subscribe', method='POST')
 def subscribe():
+    try:
+        with open(FILENAME) as f:
+            subs = json.load(f)
+    except IOError:
+        subs = {}
+    import pdb; pdb.set_trace()  # XXX BREAKPOINT
+    doctor = request.forms.doctor
+    hospital = request.forms.get('hospital')
+    current = subs.setdefault(hospital, [])
+    if doctor not in current:
+        current.append(doctor)
+    with open(FILENAME, 'w') as f:
+        json.dump(subs, f)
+    return template('<b>Подписка оформлена {{name}}</b>!', name=doctor)
+
+
+@route('/unsubscribe', method='POST')
+def unsubscribe():
     name = 1
     return template('<b>Hello {{name}}</b>!', name=name)
 
