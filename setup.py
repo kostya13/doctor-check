@@ -9,5 +9,5 @@ setup(name='doctor-check',
       install_requires=['bs4', 'requests', 'bottle', 'gunicorn'],
       entry_points={
           'console_scripts': [
-              'doctor-check=doctor_check.main:main',
+              'doctor-check=doctor_check.watch:main',
               'doctor-server=doctor_check.server:main']})
