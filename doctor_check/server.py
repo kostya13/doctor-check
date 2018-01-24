@@ -1,4 +1,4 @@
-#!/home/u6334sbtt/venv/igis/bin/python
+#!/home/kostya/venvs/igis2/bin/python2.7
 # -*- coding: utf-8 -*-
 import codecs
 from bottle import route, run, template, abort, request
@@ -196,4 +196,4 @@ def main():
 #if __name__ == "__main__":
 #    main()
 
-run(server='cgi')
+run(server='cgi', debug=True)

@@ -1,4 +1,4 @@
-#!/home/u6334sbtt/venv/igis/bin/python
+#!/home/kostya/venvs/igis2/bin/python2.7
 # -*- coding: utf-8 -*-
 import os
 import codecs

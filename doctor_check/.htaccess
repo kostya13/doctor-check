@@ -1,0 +1,6 @@
+Options -Indexes +ExecCGI
+AddHandler cgi-script .py
+DirectoryIndex server.py
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ /server.py/$1 [QSA,PT,L]
