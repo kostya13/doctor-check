@@ -174,10 +174,10 @@ def unsubscribe():
     doctor = request.forms.doctor
     hospital = request.forms.hospital
     doc_id = request.forms.doc_id
-    current = [d for d in subscriptions.setdefault(hospital, []) if d[1] != doc_id]
-    subscriptions[hospital] = current
+    current = [d for d in subs.setdefault(hospital, []) if d[1] != doc_id]
+    subs[hospital] = current
     with open(FILENAME, 'w') as f:
-        json.dump(subscriptions, f, ensure_ascii=False)
+        json.dump(subs, f, ensure_ascii=False)
     unsubs_page = """
     <b>Подписка удалена {{name}}</b>!
     <br>
