@@ -1,5 +1,6 @@
 #!/home/u6334sbtt/venv/igis/bin/python
 # -*- coding: utf-8 -*-
+import os
 import codecs
 from bs4 import BeautifulSoup
 import requests
@@ -17,6 +18,9 @@ EMAILCONFIG = 'email.json'
 SUBSCRIPTIONS = 'subscriptions.json'
 
 
+def full_path():
+    return os.path.join(os.path.dirname(__file__), SUBSCRIPTIONS)
+
 def send_email(info):
     with open(EMAILCONFIG) as f:
         email = json.load(f)
@@ -33,7 +37,6 @@ def send_email(info):
         server = smtplib.SMTP(email['server'], 587)
         server.ehlo()
         server.starttls()
-        print gmail_user, gmail_pwd
         server.login(gmail_user, gmail_pwd)
         server.sendmail(msg['From'], msg['To'], msg.as_string())
         #server.send_message(msg)
@@ -46,7 +49,7 @@ def send_email(info):
 def main():
         logger.debug("Проверяем")
         try:
-            with open(SUBSCRIPTIONS) as f:
+            with open(full_path()) as f:
                 subscriptions = json.load(f)
         except IOError:
             subscriptions = {}
@@ -74,7 +77,7 @@ def main():
                 current = [d for d in subscriptions.setdefault(hospital, [])
                            if d[1] not in cleanup]
                 subscriptions[hospital] = current
-            with codecs.open(SUBSCRIPTIONS, 'w', encoding="utf-8") as f:
+            with codecs.open(full_path(), 'w', encoding="utf-8") as f:
                 json.dump(subscriptions, f, ensure_ascii=False, encoding='utf-8')
 
 
