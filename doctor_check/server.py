@@ -1,3 +1,6 @@
+#!/home/u6334sbtt/venv/igis/bin/python
+# -*- coding: utf-8 -*-
+import codecs
 from bottle import route, run, template, abort, request
 import requests
 from bs4 import BeautifulSoup
@@ -23,7 +26,7 @@ def index():
 
 @route('/category/<index>')
 def categories(index):
-    data = requests.get('http://igis.ru/online?tip={}'.format(index))
+    data = requests.get('http://igis.ru/online?tip={0}'.format(index))
     links = []
     if data.ok:
         soup = BeautifulSoup(data.text, 'html.parser')
@@ -48,7 +51,7 @@ def categories(index):
 @route('/hospital/<index>')
 def hospital(index):
     data = requests.get(
-        'http://igis.ru/online?obj={}&page=zapdoc'.format(index))
+        'http://igis.ru/online?obj={0}&page=zapdoc'.format(index))
     all_doctors = OrderedDict()
     if data.ok:
         soup = BeautifulSoup(data.text, 'html.parser')
@@ -142,10 +145,9 @@ def subscribe():
     try:
         with open(FILENAME) as f:
             subs = json.load(f)
-    except IOError:
+    except (IOError, ValueError):
         subs = {}
-    except json.decoder.JSONDecodeError:
-        abort(400, "Ошибка чтения файла")
+
 
     doctor = request.forms.doctor
     doc_id = request.forms.doc_id
@@ -153,8 +155,8 @@ def subscribe():
     current = subs.setdefault(hospital, [])
     if doc_id not in [c[1] for c in current]:
         current.append([doctor, doc_id])
-    with open(FILENAME, 'w') as f:
-        json.dump(subs, f, ensure_ascii=False)
+    with codecs.open(FILENAME, 'w', encoding="utf-8") as f:
+        json.dump(subs, f, ensure_ascii=False, encoding='utf-8')
     subs_page = """
     <b>Подписка оформлена {{name}}</b>!
     <br>
@@ -174,10 +176,10 @@ def unsubscribe():
     doctor = request.forms.doctor
     hospital = request.forms.hospital
     doc_id = request.forms.doc_id
-    current = [d for d in subscriptions.setdefault(hospital, []) if d[1] != doc_id]
-    subscriptions[hospital] = current
-    with open(FILENAME, 'w') as f:
-        json.dump(subscriptions, f, ensure_ascii=False)
+    current = [d for d in subs.setdefault(hospital, []) if d[1] != doc_id]
+    subs[hospital] = current
+    with codecs.open(FILENAME, 'w', encoding="utf-8") as f:
+        json.dump(subs, f, ensure_ascii=False, encoding='utf-8')
     unsubs_page = """
     <b>Подписка удалена {{name}}</b>!
     <br>
@@ -191,5 +193,7 @@ def main():
     # run(server='gunicorn', host='0.0.0.0', port=8000)
 
 
-if __name__ == "__main__":
-    main()
+#if __name__ == "__main__":
+#    main()
+
+run(server='cgi')

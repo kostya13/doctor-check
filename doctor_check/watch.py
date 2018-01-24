@@ -1,9 +1,11 @@
+#!/home/u6334sbtt/venv/igis/bin/python
+# -*- coding: utf-8 -*-
+import codecs
 from bs4 import BeautifulSoup
 import requests
 import json
 import smtplib
-from email.message import EmailMessage
-from doctor_check.server import FILENAME
+from email.mime.text import MIMEText
 from time import sleep
 import logging
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 EMAILCONFIG = 'email.json'
-SUBSCRIPTIONS = FILENAME
+SUBSCRIPTIONS = 'subscriptions.json'
 
 
 def send_email(info):
@@ -22,27 +24,26 @@ def send_email(info):
     gmail_pwd = email['password']
 
     # Prepare actual message
-    msg = EmailMessage()
-    msg.set_content(info)
+    msg = MIMEText(info)
     msg['Subject'] = 'IGIS Новые номерки'
     msg['From'] = gmail_user
-    msg['To'] = gmail_user
+    msg['To'] = 'kx13@ya.ru'
 
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server = smtplib.SMTP(email['server'], 587)
         server.ehlo()
         server.starttls()
+        print gmail_user, gmail_pwd
         server.login(gmail_user, gmail_pwd)
-        # server.sendmail(FROM, TO, message)
-        server.send_message(msg)
+        server.sendmail(msg['From'], msg['To'], msg.as_string())
+        #server.send_message(msg)
         server.close()
         logger.debug('Почта успешно отправлена')
     except OSError as e:
-        logger.error('Не могу отправить почту: {}'.format(e))
+        logger.error('Не могу отправить почту: {0}'.format(e))
 
 
 def main():
-    while True:
         logger.debug("Проверяем")
         try:
             with open(SUBSCRIPTIONS) as f:
@@ -52,10 +53,11 @@ def main():
         cleanup = []
         for subs in subscriptions:
             if not subscriptions[subs]:
-                break
+                continue
+            #import pdb;pdb.set_trace()
             hosp_id = subscriptions[subs][0][1].split('&')[0]
             data = requests.get(
-                'http://igis.ru/online{}&page=zapdoc'.format(hosp_id))
+                'http://igis.ru/online{0}&page=zapdoc'.format(hosp_id))
             if not data.ok:
                 break
             docs = [doc[1] for doc in subscriptions[subs]]
@@ -64,17 +66,16 @@ def main():
                 if 'Всего номерков' in str(c):
                     href = c.find_all('a')[1].attrs['href']
                     if href in docs:
-                        logger.debug("Найдено совпадение: {}".format(href))
+                        logger.debug("Найдено совпадение: {0}".format(href))
                         cleanup.append(href)
-                        send_email('http://igis.ru/online{}'.format(href))
+                        send_email('http://igis.ru/online{0}'.format(href))
         if cleanup:
             for hospital in subscriptions:
                 current = [d for d in subscriptions.setdefault(hospital, [])
                            if d[1] not in cleanup]
                 subscriptions[hospital] = current
-            with open(FILENAME, 'w') as f:
-                json.dump(subscriptions, f, ensure_ascii=False)
-        sleep(30 * 60)
+            with codecs.open(SUBSCRIPTIONS, 'w', encoding="utf-8") as f:
+                json.dump(subscriptions, f, ensure_ascii=False, encoding='utf-8')
 
 
 if __name__ == "__main__":
