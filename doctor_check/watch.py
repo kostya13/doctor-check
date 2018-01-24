@@ -18,11 +18,11 @@ EMAILCONFIG = 'email.json'
 SUBSCRIPTIONS = 'subscriptions.json'
 
 
-def full_path():
-    return os.path.join(os.path.dirname(__file__), SUBSCRIPTIONS)
+def full_path(filename=SUBSCRIPTIONS):
+    return os.path.join(os.path.dirname(__file__), filename)
 
 def send_email(info):
-    with open(EMAILCONFIG) as f:
+    with open(full_path(EMAILCONFIG)) as f:
         email = json.load(f)
     gmail_user = email['email']
     gmail_pwd = email['password']
