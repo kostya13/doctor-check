@@ -6,7 +6,7 @@ setup(name='doctor-check',
       author='Konstantin Ilyashenko',
       author_email='kx13@ya.ru',
       packages=['doctor_check'],
-      install_requires=['bs4', 'requests', 'bottle', 'gunicorn'],
+      install_requires=['bs4', 'requests', 'bottle'],
       entry_points={
           'console_scripts': [
               'doctor-check=doctor_check.watch:main',
