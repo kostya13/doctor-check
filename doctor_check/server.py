@@ -1,4 +1,5 @@
-#!/home/kostya/venvs/igis2/bin/python2.7
+#!/home/u6334sbtt/venv/igis/bin/python
+# !/home/kostya/venvs/igis2/bin/python2.7
 # -*- coding: utf-8 -*-
 import codecs
 from bottle import route, run, template, abort, request, response, redirect
