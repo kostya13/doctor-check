@@ -1,6 +1,6 @@
-#!/home/u6334sbtt/venv/igis/bin/python
-# !/home/kostya/venvs/igis2/bin/python2.7
+#!/home/kostya/venvs/igis2/bin/python2.7
 # -*- coding: utf-8 -*-
+#!/home/u6334sbtt/venv/igis/bin/python
 import codecs
 from bottle import route, run, template, abort, request, response, redirect
 import requests
@@ -49,10 +49,47 @@ hosp_page = """
         % for doc in docs[item]:
             % if docs[item][doc][1] == '0':
             <li><form action='/subscribe' method="post">
-            {{doc}}
-              <input type="hidden" name="doctor" value="{{doc}}">
-              <input type="hidden" name="doc_id" value="{{docs[item][doc][0]}}">
-              <input type="hidden" name="hospital" value="{{name}}">
+            {{doc}} |
+             <input type="hidden" name="doc_name" value="{{doc}}">
+             <input type="hidden" name="doc_url" value="{{docs[item][doc][0]}}">
+             <input type="hidden" name="hospital_name" value="{{name}}">
+              Время от:  <select name="fromtime">
+                <option value="06">06</option>
+                <option value="07">07</option>
+                <option value="08">08</option>
+                <option value="06">06</option>
+                <option value="09">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+                <option value="16">16</option>
+                <option value="17">17</option>
+                <option value="18">18</option>
+                <option value="19">19</option>
+                <option value="20">20</option>
+            </select>
+              до:  <select name="totime">
+                <option value="06">06</option>
+                <option value="07">07</option>
+                <option value="08">08</option>
+                <option value="06">06</option>
+                <option value="09">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+                <option value="16">16</option>
+                <option value="17">17</option>
+                <option value="18">18</option>
+                <option value="19">19</option>
+                <option selected="selected" value="20">20</option>
+            </select>
+            Автоподписка <input type="checkbox" name="auto" value="auto">
             <input type="submit" value="Подписаться">
             </form></li>
             % else:
@@ -70,14 +107,18 @@ sub_page = """
 <ul>
 % for item in name:
     % if len(name[item]):
-    <li>{{item}}</li>
+    <li><b>{{item}}</b></li>
         <ul>
         % for doc in name[item]:
             <li><form action='/unsubscribe' method="post">
             <a href='http://igis.ru/online{{doc[1]}}'>{{doc[0]}}</a>
-                <input type="hidden" name="doc_id" value="{{doc[1]}}">
-                <input type="hidden" name="doctor" value="{{doc[0]}}">
-                <input type="hidden" name="hospital" value="{{item}}">
+            Время записи: {{doc[2]['fromtime']}}:00-{{doc[2]['totime']}}:00
+            % if doc[2]['auto']:
+                (Автозапись)
+            % end
+                <input type="hidden" name="doc_url" value="{{doc[1]}}">
+                <input type="hidden" name="doc_name" value="{{doc[0]}}">
+                <input type="hidden" name="hospital_name" value="{{item}}">
             <input type="submit" value="Отписаться">
             </form></li>
         % end
@@ -140,8 +181,16 @@ def validate(name, password):
     users = load_file('auth.json')
     if users.get(name):
         if users[name].get('password') == password:
-            return users[name]['email']
-    return None
+            return True
+    return False
+
+
+def _hospital_id(doc_url):
+    return doc_url.split('&')[0][5:]
+
+
+def _doc_id(doc_url):
+    return doc_url.split('&')[2][3:]
 
 
 @route('/login')
@@ -160,10 +209,8 @@ def logout():
 def do_login():
     name = request.forms.get('name')
     password = request.forms.get('password')
-    email = validate(name, password)
-    if email:
-        response.set_cookie("logined", email, secret='some-secret-key')
-        response.set_cookie("username", name, secret='some-secret-key')
+    if validate(name, password):
+        response.set_cookie("logined", name, secret='some-secret-key')
         redirect(request.forms.get('referer'))
     else:
         return template(not_autorized_page)
@@ -173,8 +220,8 @@ def do_login():
 @check_login
 def index():
     return template(index_page,
-                    username=request.get_cookie("username",
-                                                 secret='some-secret-key'))
+                    username=request.get_cookie("logined",
+                                                secret='some-secret-key'))
 
 
 @route('/category/<index>')
@@ -194,7 +241,7 @@ def categories(index):
 
 
 @route('/hospital/<index>')
-@check_login
+# @check_login
 def hospital(index):
     data = requests.get(
         'http://igis.ru/online?obj={0}&page=zapdoc'.format(index))
@@ -225,13 +272,17 @@ def hospital(index):
 @check_login
 def subscriptions():
     subs = load_file(FILENAME)
-    email = request.get_cookie("logined", secret='some-secret-key')
+    user = request.get_cookie("logined", secret='some-secret-key')
     doc_dict = {}
     for hospital in subs:
-        doc_dict[hospital] = []
-        for doc in subs[hospital]:
-            if email in subs[hospital][doc]['emails']:
-                doc_dict[hospital].append([subs[hospital][doc]['name'], doc])
+        doc_dict[subs[hospital]['name']] = []
+        all_doctors = subs[hospital]['doctors']
+        for doc in all_doctors:
+            if user in all_doctors[doc]['subscriptions'].keys():
+                doc_url = '?obj={0}&page=doc&id={1}'.format(hospital, doc)
+                user_info = all_doctors[doc]['subscriptions'][user]
+                doc_dict[subs[hospital]['name']].append(
+                    (all_doctors[doc]['name'], doc_url, user_info))
     return template(sub_page, name=doc_dict)
 
 
@@ -239,20 +290,29 @@ def subscriptions():
 @check_login
 def subscribe():
     subs = load_file(FILENAME)
-    doctor = request.forms.doctor
-    doc_id = request.forms.doc_id
-    hospital = request.forms.hospital
-    if not all([hospital, doctor, doc_id]):
+    doc_name = request.forms.doc_name
+    doc_url = request.forms.doc_url
+    hospital_name = request.forms.hospital_name
+    fromtime = request.forms.fromtime
+    totime = request.forms.totime
+    auto = request.forms.auto
+    if not all([hospital_name, doc_name, doc_url,  fromtime, totime]):
         abort(400, "Некорректный запрос")
-    email = request.get_cookie("logined", secret='some-secret-key')
-    hospital_key = subs.setdefault(hospital, {})
-    doc_id_key = hospital_key.setdefault(doc_id, {})
-    doc_id_key['name'] = doctor
-    emails = doc_id_key.setdefault('emails', [])
-    if email not in emails:
-        emails.append(email)
+    user = request.get_cookie("logined", secret='some-secret-key')
+    hospital_id = _hospital_id(doc_url)
+    doc_id = _doc_id(doc_url)
+    hospital = subs.setdefault(hospital_id, {})
+    hospital['name'] = hospital_name
+    doctors = hospital.setdefault('doctors', {})
+    doctor = doctors.setdefault(doc_id, {})
+    doctor['name'] = doc_name
+    subscriptions = doctor.setdefault('subscriptions', {})
+    users = subscriptions.setdefault(user, {})
+    users['fromtime'] = fromtime
+    users['totime'] = totime
+    users['auto'] = auto
     save_file(FILENAME, subs)
-    return template(subs_page, name=doctor)
+    return template(subs_page, name=doc_name)
 
 
 @route('/unsubscribe', method='POST')
@@ -261,24 +321,21 @@ def unsubscribe():
     subs = load_file(FILENAME)
     if not subs:
         return template("Нет подписок")
-    doctor = request.forms.doctor
-    hospital = request.forms.hospital
-    doc_id = request.forms.doc_id
-    email = request.get_cookie("logined", secret='some-secret-key')
-    if not all([subs, doctor, doc_id, email]):
+    doc_name = request.forms.doc_name
+    doc_url = request.forms.doc_url
+    hospital_name = request.forms.hospital_name
+    name = request.get_cookie("logined", secret='some-secret-key')
+    if not all([subs, doc_name, doc_url, hospital_name, name]):
         abort(400, "Некорректный запрос")
-    hospital_key = subs.setdefault(hospital, {})
-    doc_id_key = hospital_key.setdefault(doc_id, {})
-    if not doc_id_key:
-        abort(400, "Некого отписывать")
-    emails = doc_id_key.setdefault('emails', [])
-    emails.remove(email)
-    if not emails:
-        del subs[hospital][doc_id]
-    if not subs[hospital]:
-        del subs[hospital]
+    hospital_id = _hospital_id(doc_url)
+    doc_id = _doc_id(doc_url)
+    del subs[hospital_id]['doctors'][doc_id]['subscriptions'][name]
+    if not subs[hospital_id]['doctors'][doc_id]['subscriptions']:
+        del subs[hospital_id]['doctors'][doc_id]
+    if not subs[hospital_id]['doctors']:
+        del subs[hospital_id]
     save_file(FILENAME, subs)
-    return template(unsubs_page, name=doctor)
+    return template(unsubs_page, name=doc_name)
 
 
 def main():

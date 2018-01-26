@@ -1,1 +1,5 @@
-{"name1": {"email": "email", "password": "password1"}}
+{"name": {
+  "email": "email@ya.ru", 
+  "password": "123",
+  "api_id": "sms.ru api key",
+  "tel": "7912..."}}
