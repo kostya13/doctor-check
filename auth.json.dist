@@ -2,4 +2,5 @@
   "email": "email@ya.ru", 
   "password": "123",
   "api_id": "sms.ru api key",
-  "tel": "7912..."}}
+  "tel": "7912...",
+  "auth": {"Фамилия Имя": "номер полиса"}}

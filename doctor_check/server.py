@@ -11,6 +11,13 @@ import sys
 
 
 FILENAME = 'subscriptions.json'
+AUTH_FILE = 'auth.json'
+
+DAYS_MAP = {'0': 'Понедельник',
+            '1': 'Вторник',
+            '2': 'Среда',
+            '3': 'Четверг',
+            '4': 'Пятница'}
 
 login_page = """
 <form action="/login" method="post">
@@ -54,8 +61,6 @@ hosp_page = """
              <input type="hidden" name="doc_url" value="{{docs[item][doc][0]}}">
              <input type="hidden" name="hospital_name" value="{{name}}">
               Время от:  <select name="fromtime">
-                <option value="06">06</option>
-                <option value="07">07</option>
                 <option value="08">08</option>
                 <option value="06">06</option>
                 <option value="09">09</option>
@@ -72,8 +77,6 @@ hosp_page = """
                 <option value="20">20</option>
             </select>
               до:  <select name="totime">
-                <option value="06">06</option>
-                <option value="07">07</option>
                 <option value="08">08</option>
                 <option value="06">06</option>
                 <option value="09">09</option>
@@ -89,7 +92,25 @@ hosp_page = """
                 <option value="19">19</option>
                 <option selected="selected" value="20">20</option>
             </select>
-            Автоподписка <input type="checkbox" name="auto" value="auto">
+              От дня недели:  <select name="fromweekday">
+                <option value="0">Понедельник</option>
+                <option value="1">Вторник</option>
+                <option value="2">Среда</option>
+                <option value="3">Четверг</option>
+                <option value="4">Пятница</option>
+            </select>
+              До дня недели:  <select name="toweekday">
+                <option value="0">Понедельник</option>
+                <option value="1">Вторник</option>
+                <option value="2">Среда</option>
+                <option value="3">Четверг</option>
+                <option selected="selected" value="4">Пятница</option>
+            </select>
+            Автоподписка <select name="autouser">
+                <option value="">-----</option>
+                % for user in autousers:
+                <option value="{{user}}">{{user}}</option>
+                % end
             <input type="submit" value="Подписаться">
             </form></li>
             % else:
@@ -112,9 +133,10 @@ sub_page = """
         % for doc in name[item]:
             <li><form action='/unsubscribe' method="post">
             <a href='http://igis.ru/online{{doc[1]}}'>{{doc[0]}}</a>
-            Время записи: {{doc[2]['fromtime']}}:00-{{doc[2]['totime']}}:00
-            % if doc[2]['auto']:
-                (Автозапись)
+            {{doc[2]['fromtime']}}:00 - {{doc[2]['totime']}}:00
+            [{{dmap[doc[2]['fromweekday']]}} - {{dmap[doc[2]['toweekday']]}}]
+            % if doc[2]['autouser']:
+                (Автозапись: {{doc[2]['autouser']}})
             % end
                 <input type="hidden" name="doc_url" value="{{doc[1]}}">
                 <input type="hidden" name="doc_name" value="{{doc[0]}}">
@@ -161,7 +183,7 @@ def load_file(filename):
 
 def save_file(filename, content):
     with codecs.open(filename, 'w', encoding="utf-8") as f:
-        json.dump(content, f, ensure_ascii=False, encoding='utf-8')
+        json.dump(content, f, ensure_ascii=False, encoding='utf-8', indent=2)
 
 
 def is_logined():
@@ -262,8 +284,13 @@ def hospital(index):
                 doc = all_doctors.setdefault(category, {})
                 doc[c.b.text] = (c.find_all('a')[1].attrs['href'],
                                  c.find_all('a')[1].u.text)
+        with open(AUTH_FILE) as f:
+            auth_info = json.load(f)
+        user = request.get_cookie("logined", secret='some-secret-key')
+        autousers =[u for u in auth_info[user]['auth']]
         back = request.get_header('Referer')
-        return template(hosp_page, docs=all_doctors, back=back, name=name)
+        return template(hosp_page, docs=all_doctors, back=back, name=name,
+                        autousers=autousers)
     else:
         abort(400, "!!!")
 
@@ -283,7 +310,7 @@ def subscriptions():
                 user_info = all_doctors[doc]['subscriptions'][user]
                 doc_dict[subs[hospital]['name']].append(
                     (all_doctors[doc]['name'], doc_url, user_info))
-    return template(sub_page, name=doc_dict)
+    return template(sub_page, name=doc_dict, dmap=DAYS_MAP)
 
 
 @route('/subscribe', method='POST')
@@ -295,7 +322,13 @@ def subscribe():
     hospital_name = request.forms.hospital_name
     fromtime = request.forms.fromtime
     totime = request.forms.totime
-    auto = request.forms.auto
+    fromweekday = request.forms.fromweekday
+    toweekday = request.forms.toweekday
+    if totime < fromtime:
+        abort(400, "Неправильно задано время")
+    if toweekday < fromweekday and toweekday != '-1':
+        abort(400, "Неправильно заданы дни недели")
+    autouser = request.forms.autouser
     if not all([hospital_name, doc_name, doc_url,  fromtime, totime]):
         abort(400, "Некорректный запрос")
     user = request.get_cookie("logined", secret='some-secret-key')
@@ -310,7 +343,9 @@ def subscribe():
     users = subscriptions.setdefault(user, {})
     users['fromtime'] = fromtime
     users['totime'] = totime
-    users['auto'] = auto
+    users['fromweekday'] = fromweekday
+    users['toweekday'] = toweekday
+    users['autouser'] = autouser
     save_file(FILENAME, subs)
     return template(subs_page, name=doc_name)
 
