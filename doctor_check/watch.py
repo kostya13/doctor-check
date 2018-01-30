@@ -1,6 +1,6 @@
-#!/home/kostya/venvs/igis2/bin/python2.7
-# -*- coding: utf-8 -*-
 #!/home/u6334sbtt/venv/igis/bin/python
+# -*- coding: utf-8 -*-
+#!/home/kostya/venvs/igis2/bin/python2.7
 import os
 import codecs
 from bs4 import BeautifulSoup
@@ -11,6 +11,9 @@ from email.mime.text import MIMEText
 import logging
 import time
 import datetime
+from collections import namedtuple
+
+Cleanup = namedtuple('Cleanup', "hosp_id, doc_id, user")
 
 
 EMAILCONFIG = 'email.json'
@@ -24,7 +27,11 @@ FRIDAY = 4
 
 RND = '91755'
 
+# SMS_TEST = 1
+SMS_TEST = 0
+
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
+                    # level=logging.INFO)
                     level=logging.INFO,
                     filename=os.path.join(os.path.dirname(__file__),
                                           'watch.log'))
@@ -51,7 +58,7 @@ def sms_limit(api_id):
         return False
 
 
-def send_sms(api_id, to, url, test=0):
+def send_sms(api_id, to, url, message, test=0):
     if not sms_limit(api_id):
         logger.error("Дневной лимит SMS исчерпан")
         return
@@ -60,7 +67,7 @@ def send_sms(api_id, to, url, test=0):
                         params={
                             'api_id': api_id,
                             'to': to,
-                            'msg': "Номерки {0}".format(url),
+                            'msg': "Номерки {0} {1}".format(url, message),
                             'json': 1,
                             'test': test})
     if data.ok:
@@ -75,14 +82,14 @@ def send_sms(api_id, to, url, test=0):
         logger.error("Ошибка отправки SMS: {0}".format(data.text))
 
 
-def send_email(reciever, info):
+def send_email(reciever, info, message):
     with open(full_path(EMAILCONFIG)) as f:
         email = json.load(f)
     gmail_user = email['email']
     gmail_pwd = email['password']
 
     # Prepare actual message
-    msg = MIMEText(info)
+    msg = MIMEText('{0} {1}'.format(info, message))
     msg['Subject'] = 'IGIS Новые номерки'
     msg['From'] = gmail_user
     msg['To'] = reciever
@@ -102,8 +109,10 @@ def send_email(reciever, info):
 def is_anytime(fromtime, totime):
     return fromtime == TIME_MIN and totime == TIME_MAX
 
+
 def is_weekday(fromweekday, toweekday):
     return fromweekday == MONDAY and toweekday == FRIDAY
+
 
 def get_ticket(fromtime, totime, href, fromweekday, toweekday):
     data = requests.get(
@@ -131,14 +140,17 @@ def get_ticket(fromtime, totime, href, fromweekday, toweekday):
 def login(hospital_id, surname, polis):
     data = requests.get('http://igis.ru/com/online/login.php',
                         params={'login': '1',
-                                'obj':  hospital_id,
+                                'obj': hospital_id,
                                 'f': surname,
                                 'p': polis,
                                 'rnd': RND})
     if data.ok:
+        if 'Ошибка авторизации' in data.text.encode('utf-8'):
+            return None
         return data.cookies
     else:
-        logger.error("Ошибка авторизации: {0}".format(data.text))
+        logger.error(
+            "Ошибка авторизации: {0}".format(data.text.encode('utf-8')))
         return None
 
 
@@ -156,7 +168,7 @@ def get_tiket(tiket_info, cookies):
 def main():
         logger.debug("Проверяем")
         try:
-            with open(full_path(AUTH_FILE)) as f:
+            with codecs.open(full_path(AUTH_FILE),  encoding="utf-8") as f:
                 auth_info = json.load(f)
         except IOError:
             logger.error('Невозможно загрузить файл с реквизитами')
@@ -185,16 +197,22 @@ def main():
                     for user in all_doctors[doc_id]['subscriptions'].keys():
                         url = 'http://igis.ru/online{0}'.format(href)
                         email = auth_info[user]['email']
-                        api_id = auth_info[user].get('api_id')
-                        tel = auth_info[user].get('tel')
-                        autouser = all_doctors[doc_id]['subscriptions'][user]['autouser']
-                        fromtime = all_doctors[doc_id]['subscriptions'][user]['fromtime']
-                        totime = all_doctors[doc_id]['subscriptions'][user]['totime']
-                        fromweekday = int(all_doctors[doc_id]['subscriptions'][user]['fromweekday'])
-                        toweekday = int(all_doctors[doc_id]['subscriptions'][user]['toweekday'])
-                        if not (is_anytime(fromtime, totime) and is_weekday(fromweekday, toweekday)):
+                        api_id = auth_info[user]['sms'].get('api_id')
+                        tel = auth_info[user]['sms'].get('tel')
+                        user_dict = all_doctors[doc_id]['subscriptions'][user]
+                        autouser = user_dict['autouser']
+                        fromtime = user_dict['fromtime']
+                        totime = user_dict['totime']
+                        fromweekday = int(user_dict['fromweekday'])
+                        toweekday = int(user_dict['toweekday'])
+                        message = ''
+                        logger.debug(
+                            "Пользователь: {0}".format(json.dumps(
+                                user_dict, ensure_ascii=False).encode('utf-8')))
+                        if not (is_anytime(fromtime, totime) and
+                                is_weekday(fromweekday, toweekday)) or autouser:
                             tiket = get_ticket(fromtime, totime, href,
-                                                int(fromweekday), int(toweekday))
+                                               int(fromweekday), int(toweekday))
                             if not tiket:
                                 logger.debug("Время не совпадает")
                                 continue
@@ -204,17 +222,26 @@ def main():
                                     surename = autouser.split(' ')[0]
                                     polis = auth_info[user]['auth'][autouser]
                                     cookies = login(hosp_id, surename, polis)
-                                    get_tiket(tiket, cookies)
-                        send_email(email, url)
+                                    if cookies:
+                                        if get_tiket(tiket, cookies):
+                                            message = 'подписаны'
+                                        else:
+                                            message = 'ошибка автоподписки'
+                                            logger.debug(
+                                                "Ошибка автоматической подписки")
+                                    else:
+                                        logger.debug("Ошибка авторизации")
+                        send_email(email, url, message)
                         if api_id and tel:
-                            send_sms(api_id, tel, url, 1)
-                        cleanup.append((hosp_id, doc_id, user))
+                            send_sms(api_id, tel, url, message, SMS_TEST)
+                        cleanup.append(Cleanup(hosp_id, doc_id, user))
         for c in cleanup:
-            del subscriptions[c[0]]['doctors'][c[1]]['subscriptions'][user]
-            if not subscriptions[c[0]]['doctors'][c[1]]['subscriptions']:
-                del subscriptions[c[0]]['doctors'][c[1]]
-            if not subscriptions[c[0]]['doctors']:
-                del subscriptions[c[0]]
+            doctors = subscriptions[c.hosp_id]['doctors']
+            del doctors[c.doc_id]['subscriptions'][c.user]
+            if not doctors[c.doc_id]['subscriptions']:
+                del doctors[c.doc_id]
+            if not doctors:
+                del subscriptions[c.hosp_id]
         if cleanup:
             with codecs.open(full_path(), 'w', encoding="utf-8") as f:
                 json.dump(subscriptions, f, ensure_ascii=False,

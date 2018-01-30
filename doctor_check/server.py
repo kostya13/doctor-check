@@ -1,6 +1,6 @@
-#!/home/kostya/venvs/igis2/bin/python2.7
-# -*- coding: utf-8 -*-
 #!/home/u6334sbtt/venv/igis/bin/python
+# -*- coding: utf-8 -*-
+#!/home/kostya/venvs/igis2/bin/python2.7
 import codecs
 from bottle import route, run, template, abort, request, response, redirect
 import requests
@@ -19,34 +19,60 @@ DAYS_MAP = {'0': 'Понедельник',
             '3': 'Четверг',
             '4': 'Пятница'}
 
-login_page = """
+html = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Номеркождун</title>
+  <style>
+    body {{
+      line-height: 1.5;
+      background-color: #BEF7F5;}}
+  </style>
+  <script>
+  //Здесь можно вставить скрипт
+  </script>
+</head>
+<body>
+{0}
+</body>
+</html>
+"""
+
+login_page = html.format("""
 <form action="/login" method="post">
     Имя: <input name="name" type="text" />
     Пароль: <input name="password" type="password" />
     <input name="referer" value="{{referer}}" type="hidden" />
     <input value="Логин" type="submit" />
 </form>
-"""
+""")
 
-not_autorized_page = """
+not_autorized_page = html.format("""
 Пройдите авторизацию снова <a href="/login">Авторизация</a>
 <br><br>
 <a href="/">Главная</a>
-"""
+""")
 
-index_page = """
-<h1>Пользователь: {{username}}</h1>
+index_page = html.format("""
+<table>
+    <tr>
+        <td><img src="ждун.png"></td>
+        <td><h1>Номеркождун: {{username}}</h1></td>
+    </tr>
+</table>
 <a href='category/1'>Взрослые больницы</a><br>
 <a href='category/2'>Детские больницы</a><br>
 <a href='category/3'>Стоматологии</a><br>
 <a href='category/4'>Диспансеры и спецучереждения</a>
 <br><br>
-<a href='subscriptions'>Текущие подписки</a>
+<b><a href='subscriptions'>Текущие подписки</a></b>
 <br><br>
 <a href='logout'>Выход</a>
-"""
+""")
 
-hosp_page = """
+hosp_page = html.format("""
 <a href='{{back}}'> Назад</a><br><br>
 <h2>{{name}}</h2>
 <ul>
@@ -121,9 +147,9 @@ hosp_page = """
         </ul>
 % end
 </ul>
-"""
+""")
 
-sub_page = """
+sub_page = html.format("""
 <a href='/'> Назад</a><br><br>
 <ul>
 % for item in name:
@@ -148,28 +174,35 @@ sub_page = """
     % end
 % end
 </ul>
-"""
+""")
 
-cat_page = """
+cat_page = html.format("""
 <a href='/'> Назад</a><br><br>
 <ul>
 % for item in name:
     <li><a href='/hospital/{{item[0]}}'> {{item[1]}}</a></li>
 % end
 </ul>
-"""
+""")
 
-subs_page = """
+subs_page = html.format("""
 <b>Подписка оформлена для: {{name}}</b>!
 <br>
 <a href='/'>Назад</a>
-"""
+""")
 
-unsubs_page = """
+subs_error = html.format("""
+<b>Ошибка подписки: {{message}}</b>!
+<br>
+<a href='{{referer}}'>Назад</a>
+""")
+
+unsubs_page = html.format("""
 <b>Подписка удалена для: {{name}}</b>!
 <br>
 <a href='/'>Назад</a>
-"""
+""")
+
 
 
 def load_file(filename):
@@ -277,22 +310,21 @@ def hospital(index):
                 continue
             except AttributeError:
                 pass
+            doc = all_doctors.setdefault(category, {})
             if 'Номерков нет' in str(c):
-                doc = all_doctors.setdefault(category, {})
                 doc[c.b.text] = (c.a.attrs['href'], '0')
             if 'Всего номерков' in str(c):
-                doc = all_doctors.setdefault(category, {})
                 doc[c.b.text] = (c.find_all('a')[1].attrs['href'],
                                  c.find_all('a')[1].u.text)
         with open(AUTH_FILE) as f:
             auth_info = json.load(f)
         user = request.get_cookie("logined", secret='some-secret-key')
-        autousers =[u for u in auth_info[user]['auth']]
+        autousers = [u for u in auth_info[user].get('auth', [])]
         back = request.get_header('Referer')
         return template(hosp_page, docs=all_doctors, back=back, name=name,
                         autousers=autousers)
     else:
-        abort(400, "!!!")
+        abort(400, "Ошибка")
 
 
 @route('/subscriptions')
@@ -324,10 +356,15 @@ def subscribe():
     totime = request.forms.totime
     fromweekday = request.forms.fromweekday
     toweekday = request.forms.toweekday
+    referer = request.headers.get('Referer')
     if totime < fromtime:
-        abort(400, "Неправильно задано время")
-    if toweekday < fromweekday and toweekday != '-1':
-        abort(400, "Неправильно заданы дни недели")
+        return template(subs_error,
+                        message="Время начала больше время окончания",
+                        referer=referer)
+    if toweekday < fromweekday:
+        return template(subs_error,
+                        message="Неправильно заданы дни недели",
+                        referer=referer)
     autouser = request.forms.autouser
     if not all([hospital_name, doc_name, doc_url,  fromtime, totime]):
         abort(400, "Некорректный запрос")
