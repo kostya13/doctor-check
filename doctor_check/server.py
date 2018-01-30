@@ -59,7 +59,7 @@ index_page = html.format("""
 <table>
     <tr>
         <td><img src="ждун.png"></td>
-        <td><h1>Номеркождун: {{username}}</h1></td>
+        <td><h1>Номеркождун:<br> {{username}}</h1></td>
     </tr>
 </table>
 <a href='category/1'>Взрослые больницы</a><br>
