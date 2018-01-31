@@ -4,12 +4,41 @@ import logging
 import json
 import smtplib
 from email.mime.text import MIMEText
-from doctor_check import full_path, EMAILCONFIG
+from doctor_check import (load_file, save_file)
 
 
 RND = '91755'
 logger = logging.getLogger(__name__)
+TOKEN = '506351730:AAGjwM8ZCiI19eCN_npFP4acC90lp3O2y2I'
 
+
+class BotHandler:
+
+    def __init__(self):
+        self.api_url = "https://api.telegram.org/bot{0}/".format(TOKEN)
+
+    def get_updates(self, offset=None, timeout=30):
+        method = 'getUpdates'
+        params = {'timeout': timeout, 'offset': offset}
+        resp = requests.get(self.api_url + method, params)
+        result_json = resp.json()['result']
+        return result_json
+
+    def send_message(self, chat_id, text):
+        params = {'chat_id': chat_id, 'text': text}
+        method = 'sendMessage'
+        resp = requests.post(self.api_url + method, params)
+        return resp
+
+    def get_last_update(self):
+        get_result = self.get_updates()
+
+        if len(get_result) > 0:
+            last_update = get_result[-1]
+        else:
+            last_update = get_result[len(get_result)]
+
+        return last_update
 
 def igis_login(hospital_id, surname, polis):
     data = requests.get('http://igis.ru/com/online/login.php',
@@ -82,9 +111,7 @@ def send_sms(api_id, to, message, test=0):
         logger.error("Ошибка отправки SMS: {0}".format(data.text))
 
 
-def send_email(reciever, message):
-    with open(full_path(EMAILCONFIG)) as f:
-        email = json.load(f)
+def send_email(email, reciever, message):
     gmail_user = email['email']
     gmail_pwd = email['password']
 
@@ -104,3 +131,21 @@ def send_email(reciever, message):
         logger.debug('Почта успешно отправлена')
     except OSError as e:
         logger.error('Не могу отправить почту: {0}'.format(e))
+
+
+def check_telegram_users(config_file, users):
+    config = load_file(config_file)
+    bot = BotHandler()
+    for u in bot.get_updates():
+        message = u['message']['text']
+        if message in users and not config.get(message):
+            logger.info("Добавлен telegram пользователь: {0}".format(message))
+            config[u['message']['text']] = u['message']['chat']['id']
+            bot.send_message(u['message']['chat']['id'], "Вы добавлены в список рассылки")
+    save_file(config_file, config)
+
+
+def send_telegram(config ,user, message):
+    bot = BotHandler()
+    if config.get(user):
+        bot.send_message(config[user], message)

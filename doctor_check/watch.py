@@ -1,7 +1,7 @@
-#!/home/kostya/venvs/igis2/bin/python2.7
-# -*- coding: utf-8 -*-
 #!/home/u6334sbtt/venv/igis/bin/python
-import codecs
+# -*- coding: utf-8 -*-
+#!/home/kostya/venvs/igis2/bin/python2.7
+import os
 from bs4 import BeautifulSoup
 import requests
 import json
@@ -10,10 +10,11 @@ import time
 import datetime
 from collections import namedtuple
 from doctor_check.services import (igis_login, get_tiket, send_sms,
-                                   send_email)
+                                   send_telegram, send_email,
+                                   check_telegram_users)
 
-from doctor_check import (full_path, AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS,
-                          load_file, save_file)
+from doctor_check import (AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS, EMAILCONFIG,
+                          TELEGRAM_FILE, load_file, save_file)
 from filelock import FileLock
 
 Cleanup = namedtuple('Cleanup', "hosp_id, doc_id, user")
@@ -25,17 +26,20 @@ MONDAY = 0
 FRIDAY = 4
 
 
-SMS_TEST = 1
-# SMS_TEST = 0
+# SMS_TEST = 1
+SMS_TEST = 0
 
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
-                    level=logging.INFO)
-                    # level=logging.INFO,
-                    # filename=os.path.join(os.path.dirname(__file__),
-                                          # 'watch.log'))
+                    # level=logging.INFO)
+                    level=logging.INFO,
+                    filename=os.path.join(os.path.dirname(__file__),
+                                          'watch.log'))
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
+def full_path(filename=SUBSCRIPTIONS):
+    return os.path.join(os.path.dirname(__file__), filename)
 
 def is_anytime(fromtime, totime):
     return fromtime == TIME_MIN and totime == TIME_MAX
@@ -74,6 +78,7 @@ def main():
         if not auth_info:
             logger.error('Невозможно загрузить файл с реквизитами')
             quit(1)
+        check_telegram_users(full_path(TELEGRAM_FILE), auth_info.keys())
         subscriptions = load_file(full_path(SUBSCRIPTIONS))
         cleanup = []
         for hosp_id in subscriptions:
@@ -127,12 +132,15 @@ def main():
                                             tiket_time = tiket.split('&')[3]
                                             message = 'Номерок: {0} {1} {2} {3}'.format(doctor_name, tiket_date, tiket_time, url)
                                         else:
-                                            message = 'Ошибка автоподписки'.format(url)
+                                            message = 'Ошибка автоподписки {0}'.format(url)
                                             logger.debug(
                                                 "Ошибка автоматической подписки")
                                     else:
                                         logger.debug("Ошибка авторизации")
-                        send_email(email, message)
+                        email_config = load_file(full_path(EMAILCONFIG))
+                        send_email(email_config, email, message)
+                        telegram_config = load_file(full_path(TELEGRAM_FILE))
+                        send_telegram(telegram_config, user, message)
                         if api_id and tel:
                             send_sms(api_id, tel, message, SMS_TEST)
                         cleanup.append(Cleanup(hosp_id, doc_id, user))
@@ -147,7 +155,7 @@ def main():
                         del doctors[c.doc_id]
                     if not doctors:
                         del subscriptions_reloaded[c.hosp_id]
-                # save_file(full_path(SUBSCRIPTIONS))
+                save_file(full_path(SUBSCRIPTIONS), subscriptions_reloaded)
 
 
 if __name__ == "__main__":

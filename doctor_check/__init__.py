@@ -2,17 +2,13 @@ import os
 import json
 import codecs
 
-
 __version__ = '1.0'
 
 EMAILCONFIG = 'email.json'
 SUBSCRIPTIONS = 'subscriptions.json'
 AUTH_FILE = 'auth.json'
 LOCK_FILE = '/tmp/subscriptions.lock'
-
-
-def full_path(filename=SUBSCRIPTIONS):
-    return os.path.join(os.path.dirname(__file__), filename)
+TELEGRAM_FILE = 'telegram.json'
 
 
 def load_file(filename):
