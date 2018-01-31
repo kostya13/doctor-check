@@ -1,17 +1,16 @@
-#!/home/u6334sbtt/venv/igis/bin/python
-# -*- coding: utf-8 -*-
 #!/home/kostya/venvs/igis2/bin/python2.7
-import codecs
+# -*- coding: utf-8 -*-
+#!/home/u6334sbtt/venv/igis/bin/python
 from bottle import route, run, template, abort, request, response, redirect
 import requests
 from bs4 import BeautifulSoup
-import json
 from collections import OrderedDict
 import sys
+from doctor_check.services import igis_login
+from doctor_check import (SUBSCRIPTIONS, AUTH_FILE, LOCK_FILE,
+                          load_file, save_file)
+from filelock import FileLock
 
-
-FILENAME = 'subscriptions.json'
-AUTH_FILE = 'auth.json'
 
 DAYS_MAP = {'0': 'Понедельник',
             '1': 'Вторник',
@@ -204,21 +203,6 @@ unsubs_page = html.format("""
 """)
 
 
-
-def load_file(filename):
-    try:
-        with open(filename) as f:
-            content = json.load(f)
-    except (IOError, ValueError):
-        content = {}
-    return content
-
-
-def save_file(filename, content):
-    with codecs.open(filename, 'w', encoding="utf-8") as f:
-        json.dump(content, f, ensure_ascii=False, encoding='utf-8', indent=2)
-
-
 def is_logined():
     return request.get_cookie("logined", secret='some-secret-key')
 
@@ -233,7 +217,7 @@ def check_login(f):
 
 
 def validate(name, password):
-    users = load_file('auth.json')
+    users = load_file(AUTH_FILE)
     if users.get(name):
         if users[name].get('password') == password:
             return True
@@ -316,8 +300,7 @@ def hospital(index):
             if 'Всего номерков' in str(c):
                 doc[c.b.text] = (c.find_all('a')[1].attrs['href'],
                                  c.find_all('a')[1].u.text)
-        with open(AUTH_FILE) as f:
-            auth_info = json.load(f)
+        auth_info = load_file(AUTH_FILE)
         user = request.get_cookie("logined", secret='some-secret-key')
         autousers = [u for u in auth_info[user].get('auth', [])]
         back = request.get_header('Referer')
@@ -330,7 +313,7 @@ def hospital(index):
 @route('/subscriptions')
 @check_login
 def subscriptions():
-    subs = load_file(FILENAME)
+    subs = load_file(SUBSCRIPTIONS)
     user = request.get_cookie("logined", secret='some-secret-key')
     doc_dict = {}
     for hospital in subs:
@@ -348,7 +331,6 @@ def subscriptions():
 @route('/subscribe', method='POST')
 @check_login
 def subscribe():
-    subs = load_file(FILENAME)
     doc_name = request.forms.doc_name
     doc_url = request.forms.doc_url
     hospital_name = request.forms.hospital_name
@@ -371,42 +353,55 @@ def subscribe():
     user = request.get_cookie("logined", secret='some-secret-key')
     hospital_id = _hospital_id(doc_url)
     doc_id = _doc_id(doc_url)
-    hospital = subs.setdefault(hospital_id, {})
-    hospital['name'] = hospital_name
-    doctors = hospital.setdefault('doctors', {})
-    doctor = doctors.setdefault(doc_id, {})
-    doctor['name'] = doc_name
-    subscriptions = doctor.setdefault('subscriptions', {})
-    users = subscriptions.setdefault(user, {})
-    users['fromtime'] = fromtime
-    users['totime'] = totime
-    users['fromweekday'] = fromweekday
-    users['toweekday'] = toweekday
-    users['autouser'] = autouser
-    save_file(FILENAME, subs)
+    lock = FileLock(LOCK_FILE)
+    with lock:
+        subs = load_file(SUBSCRIPTIONS)
+        hospital = subs.setdefault(hospital_id, {})
+        hospital['name'] = hospital_name
+        doctors = hospital.setdefault('doctors', {})
+        doctor = doctors.setdefault(doc_id, {})
+        doctor['name'] = doc_name
+        subscriptions = doctor.setdefault('subscriptions', {})
+        users = subscriptions.setdefault(user, {})
+        users['fromtime'] = fromtime
+        users['totime'] = totime
+        users['fromweekday'] = fromweekday
+        users['toweekday'] = toweekday
+        users['autouser'] = autouser
+        if autouser:
+            surename = autouser.split(' ')[0]
+            auth_info = load_file(AUTH_FILE)
+            polis = auth_info[user]['auth'][autouser]
+            if not igis_login(hospital_id, surename, polis):
+                return template(subs_error,
+                                message="Автоматическая запись невозможна",
+                                referer=referer)
+        save_file(SUBSCRIPTIONS, subs)
     return template(subs_page, name=doc_name)
 
 
 @route('/unsubscribe', method='POST')
 @check_login
 def unsubscribe():
-    subs = load_file(FILENAME)
-    if not subs:
-        return template("Нет подписок")
-    doc_name = request.forms.doc_name
-    doc_url = request.forms.doc_url
-    hospital_name = request.forms.hospital_name
-    name = request.get_cookie("logined", secret='some-secret-key')
-    if not all([subs, doc_name, doc_url, hospital_name, name]):
-        abort(400, "Некорректный запрос")
-    hospital_id = _hospital_id(doc_url)
-    doc_id = _doc_id(doc_url)
-    del subs[hospital_id]['doctors'][doc_id]['subscriptions'][name]
-    if not subs[hospital_id]['doctors'][doc_id]['subscriptions']:
-        del subs[hospital_id]['doctors'][doc_id]
-    if not subs[hospital_id]['doctors']:
-        del subs[hospital_id]
-    save_file(FILENAME, subs)
+    lock = FileLock(LOCK_FILE)
+    with lock:
+        subs = load_file(SUBSCRIPTIONS)
+        if not subs:
+            return template("Нет подписок")
+        doc_name = request.forms.doc_name
+        doc_url = request.forms.doc_url
+        hospital_name = request.forms.hospital_name
+        name = request.get_cookie("logined", secret='some-secret-key')
+        if not all([subs, doc_name, doc_url, hospital_name, name]):
+            abort(400, "Некорректный запрос")
+        hospital_id = _hospital_id(doc_url)
+        doc_id = _doc_id(doc_url)
+        del subs[hospital_id]['doctors'][doc_id]['subscriptions'][name]
+        if not subs[hospital_id]['doctors'][doc_id]['subscriptions']:
+            del subs[hospital_id]['doctors'][doc_id]
+        if not subs[hospital_id]['doctors']:
+            del subs[hospital_id]
+        save_file(SUBSCRIPTIONS, subs)
     return template(unsubs_page, name=doc_name)
 
 
