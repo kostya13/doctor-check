@@ -1,11 +1,8 @@
-#!/home/kostya/venvs/igis2/bin/python2.7
 # -*- coding: utf-8 -*-
-#!/home/u6334sbtt/venv/igis/bin/python
 from bottle import route, run, template, abort, request, response, redirect
 import requests
 from bs4 import BeautifulSoup
 from collections import OrderedDict
-import sys
 from doctor_check.services import igis_login
 from doctor_check import (SUBSCRIPTIONS, AUTH_FILE, LOCK_FILE,
                           load_file, save_file)
@@ -250,7 +247,7 @@ def do_login():
     password = request.forms.get('password')
     if validate(name, password):
         response.set_cookie("logined", name, secret='some-secret-key')
-        redirect(request.forms.get('referer'))
+        redirect('/')
     else:
         return template(not_autorized_page)
 
@@ -411,9 +408,3 @@ def main():
 
 def cgi():
     run(server='cgi', debug=True)
-
-
-if len(sys.argv) == 1:
-    cgi()
-else:
-    main()

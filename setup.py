@@ -10,4 +10,5 @@ setup(name='doctor-check',
       entry_points={
           'console_scripts': [
               'doctor-check=doctor_check.watch:main',
+              'doctor-server-cgi=doctor_check.server:cgi',
               'doctor-server=doctor_check.server:main']})
