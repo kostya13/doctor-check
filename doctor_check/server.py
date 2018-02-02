@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from bottle import route, run, template, abort, request, response, redirect
 import requests
+import time
+import datetime
 from bs4 import BeautifulSoup
 from collections import OrderedDict
-from doctor_check.services import igis_login
+from doctor_check.services import igis_login, get_subscribe
 from doctor_check import (SUBSCRIPTIONS, AUTH_FILE, LOCK_FILE,
                           load_file, save_file)
 from filelock import FileLock
@@ -25,6 +27,8 @@ html = """
     body {{
       line-height: 1.5;
       background-color: #BEF7F5;}}
+     ul li {{
+      margin-top: 20px;}}
   </style>
   <script>
   //Здесь можно вставить скрипт
@@ -76,9 +80,16 @@ hosp_page = html.format("""
     <li><b>{{item}}</b></li>
         <ul>
         % for doc in docs[item]:
-            % if docs[item][doc][1] == '0':
-            <li><form action='/subscribe' method="post">
-            {{doc}} |
+            % if docs[item][doc][2]:
+            <li><a href='/doctor/{{docs[item][doc][2]}}/{{docs[item][doc][3]}}'>
+                        {{doc}}</a>
+            % else:
+               <li>{{doc}}
+            % end
+                        <b>{{docs[item][doc][1]}}</b>&nbsp;
+                        <a href='http://igis.ru/online{{docs[item][doc][0]}}'>
+                         На сайт igis.ru</a>
+            <form action='/subscribe' method="post">
              <input type="hidden" name="doc_name" value="{{doc}}">
              <input type="hidden" name="doc_url" value="{{docs[item][doc][0]}}">
              <input type="hidden" name="hospital_name" value="{{name}}">
@@ -114,7 +125,7 @@ hosp_page = html.format("""
                 <option value="19">19</option>
                 <option selected="selected" value="20">20</option>
             </select>
-              От дня недели:  <select name="fromweekday">
+              День от:  <select name="fromweekday">
                 <option value="0">Понедельник</option>
                 <option value="1">Вторник</option>
                 <option value="2">Среда</option>
@@ -135,15 +146,40 @@ hosp_page = html.format("""
                 % end
             <input type="submit" value="Подписаться">
             </form></li>
-            % else:
-            <li><a href='http://igis.ru/online{{docs[item][doc][0]}}'>
-                {{doc}}</a> {{docs[item][doc][1]}}</li>
-            % end
         % end
         </ul>
 % end
 </ul>
 """)
+
+
+doctor_page = html.format("""
+<a href='/'> Назад</a><br><br>
+<b>{{name}}<br>
+{{spec}}</b>
+<br>
+Номерки<br>
+<ul>
+% for t in tickets:
+
+     <li>
+         <form action='/appointment' method="post">
+                          {{t[1]}} {{t[2]}} {{t[3]}}
+             <input type="hidden" name="doc_name" value="{{name}}">
+             <input type="hidden" name="tiket" value="{{t[0]}}">
+             <input type="hidden" name="hosp_id" value="{{t[4]}}">
+            <select name="autouser">
+                <option value="">-----</option>
+                % for user in autousers:
+                <option value="{{user}}">{{user}}</option>
+                % end
+            <input type="submit" value="Записаться">
+            </form>
+     </li>
+% end
+</ul>
+""")
+
 
 sub_page = html.format("""
 <a href='/'> Назад</a><br><br>
@@ -186,6 +222,15 @@ subs_page = html.format("""
 <br>
 <a href='/'>Назад</a>
 """)
+
+appointment_page = html.format("""
+<b>Номерок оформлена для: {{name}}</b>!
+<br>
+{{message}}
+<br>
+<a href='/'>Назад</a>
+""")
+
 
 subs_error = html.format("""
 <b>Ошибка подписки: {{message}}</b>!
@@ -277,7 +322,7 @@ def categories(index):
 
 
 @route('/hospital/<index>')
-# @check_login
+@check_login
 def hospital(index):
     data = requests.get(
         'http://igis.ru/online?obj={0}&page=zapdoc'.format(index))
@@ -293,10 +338,12 @@ def hospital(index):
                 pass
             doc = all_doctors.setdefault(category, {})
             if 'Номерков нет' in str(c):
-                doc[c.b.text] = (c.a.attrs['href'], '0')
+                doc[c.b.text] = (c.a.attrs['href'], '0', 0, 0)
             if 'Всего номерков' in str(c):
+                items = c.a.attrs['href'].split('&')
                 doc[c.b.text] = (c.find_all('a')[1].attrs['href'],
-                                 c.find_all('a')[1].u.text)
+                                 c.find_all('a')[1].u.text,
+                                 items[0][5:], items[2][3:])
         auth_info = load_file(AUTH_FILE)
         user = request.get_cookie("logined", secret='some-secret-key')
         autousers = [u for u in auth_info[user].get('auth', [])]
@@ -305,6 +352,75 @@ def hospital(index):
                         autousers=autousers)
     else:
         abort(400, "Ошибка")
+
+
+@route('/doctor/<hosp_id>/<doc_id>')
+@check_login
+def doctor(hosp_id, doc_id):
+    data = requests.get(
+        'http://igis.ru/online?obj={0}&page=doc&id={1}'.format(hosp_id, doc_id))
+    if not data.ok:
+        abort(400, "Ошибка загрузки страницы")
+    soup = BeautifulSoup(data.text, 'html.parser')
+    hrefs = [button.attrs['href'].encode('utf-8')
+             for button in soup.find_all("a", class_="btn green")
+             if button.attrs['href'].startswith('javascript:winbox')]
+    doc_info = soup.find("div", style="line-height:1.5;")
+    name = doc_info.find_all("b")[0].text
+    spec = [i for i in doc_info.children][5]
+    hrefs.sort(key=lambda x: x.split('&')[2])
+    auth_info = load_file(AUTH_FILE)
+    user = request.get_cookie("logined", secret='some-secret-key')
+    autousers = [u for u in auth_info[user].get('auth', [])]
+    tickets = []
+    for href in hrefs:
+        items = href.split('&')
+        day = items[2][2:]
+        day_string = "{0}.{1}.{2}".format(day[0:4], day[4:6], day[6:8])
+        t = time.strptime(day, "%Y%m%d")
+        weekday = datetime.date(*t[0:3]).weekday()
+        href_time = href.split('&')[3][2:7]
+        link = href.split(',')[1][1:-1]
+        tickets.append([link, day_string, DAYS_MAP[str(weekday)], href_time,
+                        hosp_id])
+    return template(doctor_page, name=name, spec=spec, tickets=tickets,
+                    autousers=autousers)
+
+
+@route('/appointment', method='POST')
+@check_login
+def appointment():
+    hosp_id = request.forms.hosp_id
+    doc_name = request.forms.doc_name
+    tiket = request.forms.tiket
+    autouser = request.forms.autouser
+    referer = request.headers.get('Referer')
+    if not autouser:
+        return template(
+            subs_error,
+            message="Невозмоно получить номерок. Нет указана фамилия",
+            referer=referer)
+    surename = autouser.split(' ')[0]
+    auth_info = load_file(AUTH_FILE)
+    user = request.get_cookie("logined", secret='some-secret-key')
+    polis = auth_info[user]['auth'][autouser]
+    cookies = igis_login(hosp_id, surename,
+                         polis)
+    if cookies:
+        if get_subscribe(tiket, cookies):
+            tiket_date = tiket.split('&')[2]
+            tiket_time = tiket.split('&')[3]
+            message = 'Номерок: {0} {1}'.format(tiket_date, tiket_time)
+            return template(appointment_page, name=doc_name,
+                            message=message, referer=referer)
+        else:
+            return template(
+                subs_error,
+                message="Невозмоно получить номерок. Возможно вы уже записаны.",
+                referer=referer)
+    else:
+        return template(subs_error, message="Невозможно авторизоваться",
+                        referer=referer)
 
 
 @route('/subscriptions')

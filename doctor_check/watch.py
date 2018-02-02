@@ -6,7 +6,7 @@ import logging
 import time
 import datetime
 from collections import namedtuple
-from doctor_check.services import (igis_login, get_tiket, send_sms,
+from doctor_check.services import (igis_login, get_subscribe, send_sms,
                                    send_telegram, send_email,
                                    check_telegram_users)
 
@@ -103,8 +103,10 @@ def main():
                         totime = user_dict['totime']
                         fromweekday = int(user_dict['fromweekday'])
                         toweekday = int(user_dict['toweekday'])
-                        doctor_name = all_doctors[doc_id]['name'].encode('utf-8')
-                        message = '{0} {1}'.format(doctor_name, url)
+                        doctor_name = all_doctors[doc_id]['name'].encode(
+                            'utf-8')
+                        message = '{0} http://igismed.tk/doctor/{1}/{2}'.\
+                            format(doctor_name, hosp_id, doc_id)
                         logger.debug(
                             "Пользователь: {0}".format(json.dumps(
                                 user_dict, ensure_ascii=False).encode('utf-8')))
@@ -123,14 +125,19 @@ def main():
                                     cookies = igis_login(hosp_id, surename,
                                                          polis)
                                     if cookies:
-                                        if get_tiket(tiket, cookies):
+                                        if get_subscribe(tiket, cookies):
                                             tiket_date = tiket.split('&')[2]
                                             tiket_time = tiket.split('&')[3]
-                                            message = 'Номерок: {0} {1} {2} {3}'.format(doctor_name, tiket_date, tiket_time, url)
+                                            message = \
+                                                'Номерок: {0} {1} {2} {3}'.\
+                                                format(doctor_name, tiket_date,
+                                                       tiket_time, url)
                                         else:
-                                            message = 'Ошибка автоподписки {0}'.format(url)
+                                            message = \
+                                                'Ошибка автоподписки {0}'.\
+                                                format(url)
                                             logger.debug(
-                                                "Ошибка автоматической подписки")
+                                               "Ошибка автоматической подписки")
                                     else:
                                         logger.debug("Ошибка авторизации")
                         email_config = load_file((EMAILCONFIG))

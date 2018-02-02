@@ -58,7 +58,7 @@ def igis_login(hospital_id, surname, polis):
         return None
 
 
-def get_tiket(tiket_info, cookies):
+def get_subscribe(tiket_info, cookies):
     zapis = requests.get(
         "http://igis.ru{0}&zapis=1&rnd={1}'".format(tiket_info, RND),
         cookies=cookies)
