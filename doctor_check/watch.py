@@ -3,15 +3,12 @@ from bs4 import BeautifulSoup
 import requests
 import json
 import logging
-import time
-import datetime
 from collections import namedtuple
-from doctor_check.services import (igis_login, get_subscribe, send_sms,
-                                   send_telegram, send_email,
-                                   check_telegram_users)
+from doctor_check.services import (Igis, Sms, Telegram, send_email)
+from doctor_check import (AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS,
+                          load_file, save_file,
+                          find_available_tikets, TicketInfo)
 
-from doctor_check import (AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS, EMAILCONFIG,
-                          TELEGRAM_FILE, load_file, save_file)
 from filelock import FileLock
 import urllib3
 urllib3.disable_warnings()
@@ -25,14 +22,9 @@ TIME_MAX = '20'
 MONDAY = 0
 FRIDAY = 4
 
-
-# SMS_TEST = 1
-SMS_TEST = 0
-
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
-                    # level=logging.INFO)
-                    level=logging.INFO,
-                    filename='watch.log')
+                    level=logging.INFO)
+# level=logging.INFO, filename='watch.log')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -41,124 +33,122 @@ def is_anytime(fromtime, totime):
     return fromtime == TIME_MIN and totime == TIME_MAX
 
 
-def is_weekday(fromweekday, toweekday):
+def is_allweek(fromweekday, toweekday):
     return fromweekday == MONDAY and toweekday == FRIDAY
 
 
-def get_ticket(fromtime, totime, href, fromweekday, toweekday):
+def find_ticket(fromtime, totime, href, fromweekday, toweekday):
     data = requests.get(
         'http://igis.ru/online{0}'.format(href))
     if not data.ok:
         logger.error("Ошибка загрузки: {0}".format(data.text))
-        return False
+        return ''
     soup = BeautifulSoup(data.text, 'html.parser')
-    hrefs = [button.attrs['href'].encode('utf-8')
-             for button in soup.find_all("a", class_="btn green")]
-    hrefs.sort(key=lambda x: x.split('&')[2])
+    hrefs = find_available_tikets(soup)
     for href in hrefs:
-        items = href.split('&')
-        day = items[2][2:]
-        t = time.strptime(day, "%Y%m%d")
-        weekday = datetime.date(*t[0:3]).weekday()
+        info = TicketInfo(href)
+        weekday = info.weekday
         if weekday < fromweekday or weekday > toweekday:
                 continue
-        href_time = href.split('&')[3][2:7].split(':')[0]
-        if href_time >= fromtime and href_time <= totime:
-            return href.split(',')[1][1:-1]
-    return None
+        href_hours = info.time.split(':')[0]
+        if href_hours >= fromtime and href_hours <= totime:
+            return info.link
+    return ''
+
+
+def auto_subscribe(autouser, polis, hosp_id, tiket):
+    logger.debug("Автоматическая подписка")
+    surename = autouser.split(' ')[0]
+    if not polis:
+        logger.debug("Ошибка автоматической подписки: полис не найден.")
+        return False
+    cookies = Igis.login(hosp_id, surename, polis)
+    if cookies:
+        if Igis.subscribe(tiket, cookies):
+            return True
+        else:
+            logger.debug("Ошибка автоматической подписки")
+            return False
+    else:
+        logger.debug("Ошибка авторизации")
+    return False
+
+
+def delete_completed(cleanup):
+    with FileLock(LOCK_FILE):
+        subscriptions_reloaded = load_file((SUBSCRIPTIONS))
+        for c in cleanup:
+            doctors = subscriptions_reloaded[c.hosp_id]['doctors']
+            del doctors[c.doc_id]['subscriptions'][c.user]
+            if not doctors[c.doc_id]['subscriptions']:
+                del doctors[c.doc_id]
+            if not doctors:
+                del subscriptions_reloaded[c.hosp_id]
+        save_file((SUBSCRIPTIONS), subscriptions_reloaded)
 
 
 def main():
-        logger.debug("Проверяем")
-        auth_info = load_file((AUTH_FILE))
-        if not auth_info:
-            logger.error('Невозможно загрузить файл с реквизитами')
-            quit(1)
-        check_telegram_users((TELEGRAM_FILE), auth_info.keys())
-        subscriptions = load_file((SUBSCRIPTIONS))
-        cleanup = []
-        for hosp_id in subscriptions:
-            data = requests.get(
-                'http://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id))
-            if not data.ok:
-                logger.error("Ошибка загрузки: {0}".format(data.text))
-                break
-            soup = BeautifulSoup(data.text, 'html.parser')
-            all_doctors = subscriptions[hosp_id]['doctors']
-            for c in soup.find_all('table')[5].children:
-                if 'Всего номерков' not in str(c):
-                    continue
-                href = c.find_all('a')[1].attrs['href']
-                doc_id = href.split('&')[2][3:]
-                if doc_id in all_doctors.keys():
-                    logger.debug("Найдено совпадение: {0}".format(href))
-                    for user in all_doctors[doc_id]['subscriptions'].keys():
-                        url = 'http://igis.ru/online{0}'.format(href)
-                        email = auth_info[user]['email']
-                        api_id = auth_info[user]['sms'].get('api_id')
-                        tel = auth_info[user]['sms'].get('tel')
-                        user_dict = all_doctors[doc_id]['subscriptions'][user]
-                        autouser = user_dict['autouser']
-                        fromtime = user_dict['fromtime']
-                        totime = user_dict['totime']
-                        fromweekday = int(user_dict['fromweekday'])
-                        toweekday = int(user_dict['toweekday'])
-                        doctor_name = all_doctors[doc_id]['name'].encode(
-                            'utf-8')
-                        message = '{0} http://igismed.tk/doctor/{1}/{2}'.\
-                            format(doctor_name, hosp_id, doc_id)
-                        logger.debug(
-                            "Пользователь: {0}".format(json.dumps(
-                                user_dict, ensure_ascii=False).encode('utf-8')))
-                        if not (is_anytime(fromtime, totime) and
-                                is_weekday(fromweekday, toweekday)) or autouser:
-                            tiket = get_ticket(fromtime, totime, href,
-                                               int(fromweekday), int(toweekday))
-                            if not tiket:
-                                logger.debug("Время не совпадает")
-                                continue
-                            else:
-                                if autouser and auth_info[user].get('auth'):
-                                    logger.debug("Автоматическая подписка")
-                                    surename = autouser.split(' ')[0]
-                                    polis = auth_info[user]['auth'][autouser]
-                                    cookies = igis_login(hosp_id, surename,
-                                                         polis)
-                                    if cookies:
-                                        if get_subscribe(tiket, cookies):
-                                            tiket_date = tiket.split('&')[2]
-                                            tiket_time = tiket.split('&')[3]
-                                            message = \
-                                                'Номерок: {0} {1} {2} {3}'.\
-                                                format(doctor_name, tiket_date,
-                                                       tiket_time, url)
-                                        else:
-                                            message = \
-                                                'Ошибка автоподписки {0}'.\
-                                                format(url)
-                                            logger.debug(
-                                               "Ошибка автоматической подписки")
-                                    else:
-                                        logger.debug("Ошибка авторизации")
-                        email_config = load_file((EMAILCONFIG))
-                        send_email(email_config, email, message)
-                        telegram_config = load_file((TELEGRAM_FILE))
-                        send_telegram(telegram_config, user, message)
-                        if api_id and tel:
-                            send_sms(api_id, tel, message, SMS_TEST)
-                        cleanup.append(Cleanup(hosp_id, doc_id, user))
-        if cleanup:
-            lock = FileLock(LOCK_FILE)
-            with lock:
-                subscriptions_reloaded = load_file((SUBSCRIPTIONS))
-                for c in cleanup:
-                    doctors = subscriptions_reloaded[c.hosp_id]['doctors']
-                    del doctors[c.doc_id]['subscriptions'][c.user]
-                    if not doctors[c.doc_id]['subscriptions']:
-                        del doctors[c.doc_id]
-                    if not doctors:
-                        del subscriptions_reloaded[c.hosp_id]
-                save_file((SUBSCRIPTIONS), subscriptions_reloaded)
+    logger.debug("Проверяем")
+    telegram = Telegram()
+    auth_info = load_file(AUTH_FILE)
+    if not auth_info:
+        logger.error('Невозможно загрузить файл с реквизитами')
+        quit(1)
+    telegram.check_users(auth_info.keys())
+    subscriptions = load_file(SUBSCRIPTIONS)
+    cleanup = []
+    for hosp_id, hosp_info in subscriptions.iteritems():
+        data = requests.get(
+            'http://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id))
+        if not data.ok:
+            logger.error("Ошибка загрузки: {0}".format(data.text))
+            break
+        soup = BeautifulSoup(data.text, 'html.parser')
+        all_doctors = hosp_info['doctors']
+        doctors_list = [c for c in soup.find_all('table')[5].children
+                        if 'Всего номерков' in str(c)]
+        for c in doctors_list:
+            href = c.find_all('a')[1].attrs['href']
+            doc_id = href.split('&')[2][3:]
+            if doc_id not in all_doctors.keys():
+                continue
+            logger.debug("Найдено совпадение: {0}".format(href))
+            for user in all_doctors[doc_id]['subscriptions'].keys():
+                user_dict = all_doctors[doc_id]['subscriptions'][user]
+                doctor_name = all_doctors[doc_id]['name'].encode(
+                    'utf-8')
+                message = '{0} http://igismed.tk/doctor/{1}/{2}'.\
+                    format(doctor_name, hosp_id, doc_id)
+                logger.debug("Пользователь: {0}".format(json.dumps(
+                    user_dict, ensure_ascii=False).encode('utf-8')))
+                fromtime = user_dict['fromtime']
+                totime = user_dict['totime']
+                fromweekday = int(user_dict['fromweekday'])
+                toweekday = int(user_dict['toweekday'])
+                autouser = user_dict['autouser']
+                always = (is_anytime(fromtime, totime) and
+                          is_allweek(fromweekday, toweekday))
+                if not always or autouser:
+                    tiket = find_ticket(fromtime, totime, href,
+                                        fromweekday, toweekday)
+                    if not tiket:
+                        logger.debug("Нет подходящих номерков")
+                        continue
+                    if autouser:
+                        polis = auth_info[user]['auth'].get(autouser)
+                        if auto_subscribe(autouser, polis, hosp_id, tiket):
+                            tiket_date = tiket.split('&')[2]
+                            tiket_time = tiket.split('&')[3]
+                            message = 'Записан: {0} {1} {2}'.\
+                                format(tiket_date, tiket_time, message)
+                        else:
+                            message = 'Ошибка автозаписи: {0}'.format(message)
+                email = auth_info[user]['email']
+                send_email(email, message)
+                telegram.send(user, message)
+                Sms.send(auth_info, user, message)
+                cleanup.append(Cleanup(hosp_id, doc_id, user))
+    delete_completed(cleanup)
 
 
 if __name__ == "__main__":
