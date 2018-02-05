@@ -51,7 +51,7 @@ login_page = html.format("""
 """)
 
 not_autorized_page = html.format("""
-Пройдите авторизацию снова <a href="/login">Авторизация</a>
+Пройдите авторизацию снова <a href="/login?{{referer}}">Авторизация</a>
 <br><br>
 <a href="/">Главная</a>
 """)
@@ -162,7 +162,7 @@ doctor_page = html.format("""
 % for t in tickets:
 
      <li>
-         <form action='/appointment' method="post">
+         <form action='/get-tiket' method="post">
                           {{t[1]}} {{t[2]}} {{t[3]}}
              <input type="hidden" name="doc_name" value="{{name}}">
              <input type="hidden" name="tiket" value="{{t[0]}}">
@@ -217,7 +217,7 @@ categories_page = html.format("""
 """)
 
 
-appointment_page = html.format("""
+get_tiket_page = html.format("""
 <b>Номерок оформлена для: {{name}}</b>!
 <br>
 {{message}}
@@ -255,7 +255,10 @@ def check_login(f):
         if is_logined():
             return f(*args, **kwargs)
         else:
-            redirect("/login")
+            if request.path == '/':
+                redirect("/login")
+            else:
+                redirect("/login?{0}".format(request.path))
     return decorated
 
 
@@ -285,8 +288,8 @@ def check_igis_login(hospital_id, autouser):
 
 @route('/login')
 def login():
-    referer = request.headers.get('Referer')
-    return template(login_page, referer=referer if referer else '/')
+    qkeys = request.query.keys()
+    return template(login_page, referer=qkeys[0] if qkeys else '/')
 
 
 @route('/logout')
@@ -299,11 +302,12 @@ def logout():
 def do_login():
     name = request.forms.get('name')
     password = request.forms.get('password')
+    referer = request.forms.get('referer')
     if validate(name, password):
         response.set_cookie("logined", name, secret='some-secret-key')
-        redirect('/')
+        redirect(referer)
     else:
-        return template(not_autorized_page)
+        return template(not_autorized_page, referer=referer)
 
 
 @route('/')
@@ -389,9 +393,9 @@ def doctor(hosp_id, doc_id):
                     autousers=autousers)
 
 
-@route('/appointment', method='POST')
+@route('/get-ticket', method='POST')
 @check_login
-def appointment():
+def get_tiket():
     hosp_id = request.forms.hosp_id
     doc_name = request.forms.doc_name
     tiket = request.forms.tiket
@@ -408,7 +412,7 @@ def appointment():
             tiket_date = tiket.split('&')[2][2:]
             tiket_time = tiket.split('&')[3][2:]
             message = 'Номерок: {0} {1}'.format(tiket_date, tiket_time)
-            return template(appointment_page, name=doc_name,
+            return template(get_tiket_page, name=doc_name,
                             message=message, referer=referer)
         else:
             return template(
