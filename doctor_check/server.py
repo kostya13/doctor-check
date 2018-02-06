@@ -209,11 +209,15 @@ subscriptions_page = html.format("""
 
 categories_page = html.format("""
 <a href='/'> Назад</a><br><br>
-<ul>
 % for item in name:
-    <li><a href='/hospital/{{item[0]}}'> {{item[1]}}</a></li>
+        <table>
+        <tr>
+            <td><img src="http://igis.ru/{{item[0]}}"></td>
+            <td><a href='/hospital/{{item[1][0]}}'> {{item[1][1]}}</a><br>
+               {{item[2]}}</td>
+        </tr>
+        </table>
 % end
-</ul>
 """)
 
 
@@ -325,11 +329,15 @@ def categories(index):
     links = []
     if data.ok:
         soup = BeautifulSoup(data.text, 'html.parser')
-        for link in soup.find_all('a'):
-            href = link.attrs.get('href')
-            if href and 'obj='in href:
-                links.append((href[5:], link.b.text))
-        return template(categories_page, name=links)
+        images = [i.attrs['style'].split(' ')[1][4:-1]
+                  for i in soup.find_all('div', class_='hide-sm')[2:]]
+        links = [(i.attrs['href'][5:], i.b.text)
+                 for i in soup.find_all('a') if i.attrs.get('href')
+                 and 'obj=' in i.attrs['href']]
+        address = [i.text for i in soup.find_all('div')
+                   if i.attrs.get('style')
+                   and 'padding:10px 0 0 0;' in i.attrs['style']]
+        return template(categories_page, name=zip(images, links, address))
     else:
         abort(400, "Какая-то ошибка")
 
