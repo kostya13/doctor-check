@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from collections import OrderedDict
 from doctor_check.services import Igis
 from doctor_check import (SUBSCRIPTIONS, AUTH_FILE, LOCK_FILE,
-                          load_file, save_file, find_available_tikets,
+                          load_file, save_file, find_available_tickets,
                           TicketInfo)
 from filelock import FileLock
 from collections import namedtuple
@@ -160,12 +160,11 @@ doctor_page = html.format("""
 Номерки<br>
 <ul>
 % for t in tickets:
-
      <li>
-         <form action='/get-tiket' method="post">
+         <form action='/get-ticket' method="post">
                           {{t[1]}} {{t[2]}} {{t[3]}}
              <input type="hidden" name="doc_name" value="{{name}}">
-             <input type="hidden" name="tiket" value="{{t[0]}}">
+             <input type="hidden" name="ticket" value="{{t[0]}}">
              <input type="hidden" name="hosp_id" value="{{t[4]}}">
             <select name="autouser">
                 <option value="">-----</option>
@@ -214,15 +213,34 @@ categories_page = html.format("""
         <tr>
             <td><img src="http://igis.ru/{{item[0]}}"></td>
             <td><a href='/hospital/{{item[1][0]}}'> {{item[1][1]}}</a><br>
-               {{item[2]}}</td>
+               {{item[2]}}<br>
+                <form action='/tickets' method="post">
+                    <input type="hidden" name="hosp_name" value="{{item[1][1]}}">
+                    <input type="hidden" name="hosp_id" value="{item[1][0]{}}">
+                    <select name="autouser">
+                        <option value="">-----</option>
+                        % for user in autousers:
+                        <option value="{{user}}">{{user}}</option>
+                        % end
+                    <input type="submit" value="Посмотреть номерки">
+                    </form>
         </tr>
         </table>
 % end
 """)
 
 
-get_tiket_page = html.format("""
+get_ticket_page = html.format("""
 <b>Номерок оформлена для: {{name}}</b>!
+<br>
+{{message}}
+<br>
+<a href='/'>На главную</a>
+""")
+
+
+tickets_page_get = html.format("""
+<b>Вы: {{name}}</b>!
 <br>
 {{message}}
 <br>
@@ -247,6 +265,12 @@ unsubscribed_page = html.format("""
 <b>Подписка удалена для: {{name}}</b>!
 <br>
 <a href='/'>На главную</a>
+""")
+
+
+tickets_view_page = html.format("""
+<h1>{{hosp_name}}</h1>
+<h2>Пациент: {{name}}</h2>
 """)
 
 
@@ -288,6 +312,12 @@ def check_igis_login(hospital_id, autouser):
     auth_info = load_file(AUTH_FILE)
     polis = auth_info[user]['auth'][autouser]
     return Igis.login(hospital_id, surename, polis)
+
+
+def get_auto_users():
+    auth_info = load_file(AUTH_FILE)
+    user = request.get_cookie("logined", secret='some-secret-key')
+    return [u for u in auth_info[user].get('auth', [])]
 
 
 @route('/login')
@@ -337,7 +367,8 @@ def categories(index):
         address = [i.text for i in soup.find_all('div')
                    if i.attrs.get('style')
                    and 'padding:10px 0 0 0;' in i.attrs['style']]
-        return template(categories_page, name=zip(images, links, address))
+        return template(categories_page, name=zip(images, links, address),
+                        autousers=get_auto_users())
     else:
         abort(400, "Какая-то ошибка")
 
@@ -365,9 +396,7 @@ def hospital(index):
                 doc[c.b.text] = (c.find_all('a')[1].attrs['href'],
                                  c.find_all('a')[1].u.text,
                                  items[0][5:], items[2][3:])
-        auth_info = load_file(AUTH_FILE)
-        user = request.get_cookie("logined", secret='some-secret-key')
-        autousers = [u for u in auth_info[user].get('auth', [])]
+        autousers = get_auto_users()
         back = request.get_header('Referer')
         return template(hospital_page, docs=all_doctors, back=back, name=name,
                         autousers=autousers)
@@ -386,11 +415,9 @@ def doctor(hosp_id, doc_id):
     doc_info = soup.find("div", style="line-height:1.5;")
     name = doc_info.find_all("b")[0].text
     spec = [i for i in doc_info.children][5]
-    auth_info = load_file(AUTH_FILE)
-    user = request.get_cookie("logined", secret='some-secret-key')
-    autousers = [u for u in auth_info[user].get('auth', [])]
+    autousers = get_auto_users()
     tickets = []
-    for href in find_available_tikets(soup):
+    for href in find_available_tickets(soup):
         info = TicketInfo(href)
         day = info.date
         day_string = "{0}.{1:02}.{2}".format(day[0], day[1], day[2])
@@ -403,10 +430,10 @@ def doctor(hosp_id, doc_id):
 
 @route('/get-ticket', method='POST')
 @check_login
-def get_tiket():
+def get_ticket():
     hosp_id = request.forms.hosp_id
     doc_name = request.forms.doc_name
-    tiket = request.forms.tiket
+    ticket = request.forms.ticket
     autouser = request.forms.autouser
     referer = request.headers.get('Referer')
     if not autouser:
@@ -416,11 +443,11 @@ def get_tiket():
             referer=referer)
     cookies = check_igis_login(hosp_id, autouser)
     if cookies:
-        if Igis.subscribe(tiket, cookies):
-            tiket_date = tiket.split('&')[2][2:]
-            tiket_time = tiket.split('&')[3][2:]
-            message = 'Номерок: {0} {1}'.format(tiket_date, tiket_time)
-            return template(get_tiket_page, name=doc_name,
+        if Igis.subscribe(ticket, cookies):
+            ticket_date = ticket.split('&')[2][2:]
+            ticket_time = ticket.split('&')[3][2:]
+            message = 'Номерок: {0} {1}'.format(ticket_date, ticket_time)
+            return template(get_ticket_page, name=doc_name,
                             message=message, referer=referer)
         else:
             return template(
@@ -430,6 +457,34 @@ def get_tiket():
     else:
         return template(subscribe_error, message="Невозможно авторизоваться",
                         referer=referer)
+
+
+
+@route('/tickets', method='POST')
+@check_login
+def tickets_view():
+    referer = request.headers.get('Referer')
+    hosp_id = request.forms.hosp_id
+    hosp_name = request.forms.hosp_name
+    autouser = request.forms.autouser
+    name = 'name'
+    if not autouser:
+        return template(
+            subscribe_error,
+            message="Невозмоно получить номерок. Нет указана фамилия",
+            referer=referer)
+    cookies = check_igis_login(hosp_id, autouser)
+    if cookies:
+        data = requests.get(
+            'http://igis.ru/online?obj={0}}'.format(hosp_id),
+            cookies=cookies)
+        if not data.ok:
+            abort(400, "Ошибка загрузки страницы")
+    else:
+        return template(subscribe_error, message="Невозможно авторизоваться",
+                        referer=referer)
+    soup = BeautifulSoup(data.text, 'html.parser')
+    return template(tickets_view_page, hosp_name=hosp_name, name=name)
 
 
 @route('/subscriptions')

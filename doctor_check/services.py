@@ -72,9 +72,9 @@ class Igis:
             return None
 
     @staticmethod
-    def subscribe(tiket_info, cookies):
+    def subscribe(ticket_info, cookies):
         zapis = requests.get(
-            "http://igis.ru{0}&zapis=1&rnd={1}'".format(tiket_info, RND),
+            "http://igis.ru{0}&zapis=1&rnd={1}'".format(ticket_info, RND),
             cookies=cookies)
         if zapis.ok:
             if 'У вас уже есть номерок' in zapis.text.encode('utf-8'):

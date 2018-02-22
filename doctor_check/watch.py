@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
-from bs4 import BeautifulSoup
-import requests
 import json
 import logging
 from collections import namedtuple
-from doctor_check.services import (Igis, Sms, Telegram, send_email)
+
+import requests
+import urllib3
+from bs4 import BeautifulSoup
+from filelock import FileLock
+
 from doctor_check import (AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS,
                           load_file, save_file,
-                          find_available_tikets, TicketInfo)
+                          find_available_tickets, TicketInfo)
+from doctor_check.services import (Igis, Sms, Telegram, send_email)
 
-from filelock import FileLock
-import urllib3
 urllib3.disable_warnings()
 
 
@@ -44,7 +46,7 @@ def find_ticket(fromtime, totime, href, fromweekday, toweekday):
         logger.error("Ошибка загрузки: {0}".format(data.text))
         return ''
     soup = BeautifulSoup(data.text, 'html.parser')
-    hrefs = find_available_tikets(soup)
+    hrefs = find_available_tickets(soup)
     for href in hrefs:
         info = TicketInfo(href)
         weekday = info.weekday
@@ -56,7 +58,7 @@ def find_ticket(fromtime, totime, href, fromweekday, toweekday):
     return ''
 
 
-def auto_subscribe(autouser, polis, hosp_id, tiket):
+def auto_subscribe(autouser, polis, hosp_id, ticket):
     logger.debug("Автоматическая подписка")
     surename = autouser.split(' ')[0]
     if not polis:
@@ -64,7 +66,7 @@ def auto_subscribe(autouser, polis, hosp_id, tiket):
         return False
     cookies = Igis.login(hosp_id, surename, polis)
     if cookies:
-        if Igis.subscribe(tiket, cookies):
+        if Igis.subscribe(ticket, cookies):
             return True
         else:
             logger.debug("Ошибка автоматической подписки")
@@ -129,18 +131,18 @@ def main():
                 always = (is_anytime(fromtime, totime) and
                           is_allweek(fromweekday, toweekday))
                 if not always or autouser:
-                    tiket = find_ticket(fromtime, totime, href,
+                    ticket = find_ticket(fromtime, totime, href,
                                         fromweekday, toweekday)
-                    if not tiket:
+                    if not ticket:
                         logger.debug("Нет подходящих номерков")
                         continue
                     if autouser:
                         polis = auth_info[user]['auth'].get(autouser)
-                        if auto_subscribe(autouser, polis, hosp_id, tiket):
-                            tiket_date = tiket.split('&')[2]
-                            tiket_time = tiket.split('&')[3]
+                        if auto_subscribe(autouser, polis, hosp_id, ticket):
+                            ticket_date = ticket.split('&')[2]
+                            ticket_time = ticket.split('&')[3]
                             message = 'Записан: {0} {1} {2}'.\
-                                format(tiket_date, tiket_time, message)
+                                format(ticket_date, ticket_time, message)
                         else:
                             message = 'Ошибка автозаписи: {0}'.format(message)
                 email = auth_info[user]['email']

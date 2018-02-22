@@ -27,7 +27,7 @@ def save_file(filename, content):
         json.dump(content, f, ensure_ascii=False, encoding='utf-8', indent=2)
 
 
-def find_available_tikets(soup):
+def find_available_tickets(soup):
     hrefs = [button.attrs['href'].encode('utf-8')
              for button in soup.find_all("a", class_="btn green")
              if button.attrs['href'].startswith('javascript:winbox')]
