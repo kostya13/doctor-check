@@ -11,7 +11,7 @@ from filelock import FileLock
 from doctor_check import (AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS,
                           load_file, save_file,
                           find_available_tickets, TicketInfo)
-from doctor_check.services import (Igis, Sms, Telegram, send_email)
+from doctor_check.services import (Igis, Telegram)
 
 urllib3.disable_warnings()
 

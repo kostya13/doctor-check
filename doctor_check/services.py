@@ -5,12 +5,12 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from doctor_check import (load_file, save_file, EMAILCONFIG, TELEGRAM_FILE)
+from tetoken import TOKEN
 
 
 RND = '91755'
 logger = logging.getLogger(__name__)
 
-TOKEN = '1399625035:AAGEOXP-YV-05oMA0zNUr0zqDoFd88N4zlg'
 
 SMS_TEST = 1
 # SMS_TEST = 0
@@ -85,71 +85,3 @@ class Igis:
         else:
             logger.error("Ошибка записи: {0}".format(zapis.text))
             return None
-
-
-class Sms:
-    @staticmethod
-    def limit(api_id):
-        data = requests.get('https://sms.ru/sms/my/free',
-                            params={
-                                'api_id': api_id,
-                                'json': 1}, verify=False)
-        if data.ok:
-            reply = json.loads(data.text)
-            if not reply['used_today']:
-                return True
-            return reply['total_free'] >= int(reply['used_today'])
-        else:
-            logger.error("Ошибка отправки SMS: {0}".format(data.text))
-            return False
-
-    @staticmethod
-    def send(auth_info, user,  message):
-        api_id = auth_info[user]['sms'].get('api_id')
-        tel = auth_info[user]['sms'].get('tel')
-        if not (api_id and tel):
-            return
-        if not Sms.limit(api_id):
-            logger.error("Дневной лимит SMS исчерпан")
-            return
-
-        data = requests.get('https://sms.ru/sms/send',
-                            params={
-                                'api_id': api_id,
-                                'to': tel,
-                                'msg': "{0}".format(message),
-                                'json': 1,
-                                'test': SMS_TEST}, verify=False)
-        if data.ok:
-            reply = json.loads(data.text)
-            if reply['sms'][tel]['status'] == 'ERROR':
-                logger.error(
-                    "Ошибка отправки SMS: {0}".
-                    format(reply['sms'][tel]['status_text'].encode('utf-8')))
-            else:
-                logger.debug("SMS отправлена.")
-        else:
-            logger.error("Ошибка отправки SMS: {0}".format(data.text))
-
-
-def send_email(reciever, message):
-    email = load_file(EMAILCONFIG)
-    user = email['email']
-    pwd = email['password']
-
-    # Prepare actual message
-    msg = MIMEText('{0}'.format(message))
-    msg['Subject'] = 'IGIS Новые номерки'
-    msg['From'] = user
-    msg['To'] = reciever
-
-    try:
-        server = smtplib.SMTP(email['server'], 587)
-        server.ehlo()
-        server.starttls()
-        server.login(user, pwd)
-        server.sendmail(msg['From'], msg['To'], msg.as_string())
-        server.close()
-        logger.debug('Почта успешно отправлена')
-    except OSError as e:
-        logger.error('Не могу отправить почту: {0}'.format(e))
