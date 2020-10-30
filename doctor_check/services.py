@@ -10,7 +10,7 @@ from doctor_check import (load_file, save_file, EMAILCONFIG, TELEGRAM_FILE)
 RND = '91755'
 logger = logging.getLogger(__name__)
 
-TOKEN = '506351730:AAGjwM8ZCiI19eCN_npFP4acC90lp3O2y2I'
+TOKEN = '1399625035:AAGEOXP-YV-05oMA0zNUr0zqDoFd88N4zlg'
 
 SMS_TEST = 1
 # SMS_TEST = 0
@@ -56,19 +56,19 @@ class Telegram:
 class Igis:
     @staticmethod
     def login(hospital_id, surname, polis):
-        data = requests.get('http://igis.ru/com/online/login.php',
+        data = requests.get('https://igis.ru/com/online/login.php',
                             params={'login': '1',
                                     'obj': hospital_id,
                                     'f': surname,
                                     'p': polis,
                                     'rnd': RND}, verify=False)
         if data.ok:
-            if 'Ошибка авторизации' in data.text.encode('utf-8'):
+            if 'Ошибка авторизации' in data.text:
                 return None
             return data.cookies
         else:
             logger.error(
-                "Ошибка авторизации: {0}".format(data.text.encode('utf-8')))
+                "Ошибка авторизации: {0}".format(data.text))
             return None
 
     @staticmethod
@@ -77,7 +77,7 @@ class Igis:
             "https://igis.ru{0}&zapis=1&rnd={1}'".format(ticket_info, RND),
             cookies=cookies, verify=False)
         if zapis.ok:
-            if 'У вас уже есть номерок' in zapis.text.encode('utf-8'):
+            if 'У вас уже есть номерок' in zapis.text:
                 logger.error("У вас уже есть номерок к данной специальности")
                 return False
             else:

@@ -493,9 +493,9 @@ def subscriptions():
     subs = load_file(SUBSCRIPTIONS)
     user = request.get_cookie("logined", secret='some-secret-key')
     doc_dict = {}
-    for hosp_id, hosp_info in subs.iteritems():
+    for hosp_id, hosp_info in subs.items():
         doc_dict[hosp_info['name']] = []
-        for doc_id, doc_info in hosp_info['doctors'].iteritems():
+        for doc_id, doc_info in hosp_info['doctors'].items():
             if user in doc_info['subscriptions'].keys():
                 doc_url = '?obj={0}&page=doc&id={1}'.format(hosp_id, doc_id)
                 user_info = doc_info['subscriptions'][user]

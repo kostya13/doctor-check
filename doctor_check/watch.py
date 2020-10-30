@@ -41,7 +41,7 @@ def is_allweek(fromweekday, toweekday):
 
 def find_ticket(fromtime, totime, href, fromweekday, toweekday):
     data = requests.get(
-        'http://igis.ru/online{0}'.format(href))
+        'https://igis.ru/online{0}'.format(href), verify=False)
     if not data.ok:
         logger.error("Ошибка загрузки: {0}".format(data.text))
         return ''
@@ -52,8 +52,8 @@ def find_ticket(fromtime, totime, href, fromweekday, toweekday):
         weekday = info.weekday
         if weekday < fromweekday or weekday > toweekday:
                 continue
-        href_hours = info.time.split(':')[0]
-        if href_hours >= fromtime and href_hours <= totime:
+        href_hours = info.time.split(b':')[0]
+        if href_hours.decode() >= fromtime and href_hours.decode() <= totime:
             return info.link
     return ''
 
@@ -99,9 +99,9 @@ def main():
     telegram.check_users(auth_info.keys())
     subscriptions = load_file(SUBSCRIPTIONS)
     cleanup = []
-    for hosp_id, hosp_info in subscriptions.iteritems():
+    for hosp_id, hosp_info in subscriptions.items():
         data = requests.get(
-            'http://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id))
+            'https://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id), verify=False)
         if not data.ok:
             logger.error("Ошибка загрузки: {0}".format(data.text))
             break
@@ -117,12 +117,11 @@ def main():
             logger.debug("Найдено совпадение: {0}".format(href))
             for user in all_doctors[doc_id]['subscriptions'].keys():
                 user_dict = all_doctors[doc_id]['subscriptions'][user]
-                doctor_name = all_doctors[doc_id]['name'].encode(
-                    'utf-8')
-                message = '{0} http://igismed.tk/doctor/{1}/{2}'.\
+                doctor_name = all_doctors[doc_id]['name']
+                message = '{0} https://dv.kx13.ru/doctor/{1}/{2}'.\
                     format(doctor_name, hosp_id, doc_id)
                 logger.debug("Пользователь: {0}".format(json.dumps(
-                    user_dict, ensure_ascii=False).encode('utf-8')))
+                    user_dict, ensure_ascii=False)))
                 fromtime = user_dict['fromtime']
                 totime = user_dict['totime']
                 fromweekday = int(user_dict['fromweekday'])
@@ -136,19 +135,18 @@ def main():
                     if not ticket:
                         logger.debug("Нет подходящих номерков")
                         continue
+                    ticket = ticket.decode()
                     if autouser:
                         polis = auth_info[user]['auth'].get(autouser)
                         if auto_subscribe(autouser, polis, hosp_id, ticket):
-                            ticket_date = ticket.split('&')[2]
-                            ticket_time = ticket.split('&')[3]
+                            ticket_date = ticket.split('&')[2][2:]
+                            ticket_time = ticket.split('&')[3][2:]
+                            ticket_date = '{}-{}-{}'.format(ticket_date[:4],ticket_date[4:6], ticket_date[6:])
                             message = 'Записан: {0} {1} {2}'.\
                                 format(ticket_date, ticket_time, message)
                         else:
                             message = 'Ошибка автозаписи: {0}'.format(message)
-                email = auth_info[user]['email']
-                send_email(email, message)
                 telegram.send(user, message)
-                Sms.send(auth_info, user, message)
                 cleanup.append(Cleanup(hosp_id, doc_id, user))
     delete_completed(cleanup)
 

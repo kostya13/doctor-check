@@ -9,7 +9,7 @@ __version__ = '1.0'
 EMAILCONFIG = 'email.json'
 SUBSCRIPTIONS = 'subscriptions.json'
 AUTH_FILE = 'auth.json'
-LOCK_FILE = '/tmp/subscriptions.lock'
+LOCK_FILE = 'subscriptions.lock'
 TELEGRAM_FILE = 'telegram.json'
 
 
@@ -24,8 +24,8 @@ def load_file(filename):
 
 
 def save_file(filename, content):
-    with codecs.open(filename, 'w', encoding="utf-8") as f:
-        json.dump(content, f, ensure_ascii=False, encoding='utf-8', indent=2)
+    with codecs.open(filename, 'w', encoding='utf8') as f:
+        json.dump(content, f, ensure_ascii=False, indent=2)
 
 
 def find_available_tickets(soup):
