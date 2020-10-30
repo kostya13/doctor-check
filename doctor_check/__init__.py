@@ -15,9 +15,10 @@ TELEGRAM_FILE = 'telegram.json'
 
 def load_file(filename):
     try:
-        with open(filename) as f:
+        with open(filename, encoding='utf8') as f:
             content = json.load(f)
-    except (IOError, ValueError):
+    except (IOError, ValueError) as e:
+        print(e)
         content = {}
     return content
 
@@ -31,7 +32,7 @@ def find_available_tickets(soup):
     hrefs = [button.attrs['href'].encode('utf-8')
              for button in soup.find_all("a", class_="btn green")
              if button.attrs['href'].startswith('javascript:winbox')]
-    hrefs.sort(key=lambda x: x.split('&')[2])
+    hrefs.sort(key=lambda x: x.split(b'&')[2])
     return hrefs
 
 
@@ -45,7 +46,7 @@ class TicketInfo:
     """
     def __init__(self, href):
         self.href = href
-        self.items = href.split('&')
+        self.items = href.split(b'&')
 
     @property
     def daystring(self):
@@ -57,7 +58,7 @@ class TicketInfo:
 
     @property
     def date(self):
-        return time.strptime(self.daystring, "%Y%m%d")
+        return time.strptime(self.daystring.decode(), "%Y%m%d")
 
     @property
     def weekday(self):
@@ -65,4 +66,4 @@ class TicketInfo:
 
     @property
     def link(self):
-        return self.href.split(',')[1][1:-1]
+        return self.href.split(b',')[1][1:-1]

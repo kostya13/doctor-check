@@ -355,7 +355,7 @@ def index():
 @route('/category/<index>')
 @check_login
 def categories(index):
-    data = requests.get('http://igis.ru/online?tip={0}'.format(index))
+    data = requests.get('https://igis.ru/online?tip={0}'.format(index), verify=False)
     links = []
     if data.ok:
         soup = BeautifulSoup(data.text, 'html.parser')
@@ -377,7 +377,7 @@ def categories(index):
 @check_login
 def hospital(index):
     data = requests.get(
-        'http://igis.ru/online?obj={0}&page=zapdoc'.format(index))
+        'https://igis.ru/online?obj={0}&page=zapdoc'.format(index), verify=False)
     all_doctors = OrderedDict()
     if data.ok:
         soup = BeautifulSoup(data.text, 'html.parser')
@@ -408,7 +408,7 @@ def hospital(index):
 @check_login
 def doctor(hosp_id, doc_id):
     data = requests.get(
-        'http://igis.ru/online?obj={0}&page=doc&id={1}'.format(hosp_id, doc_id))
+        'https://igis.ru/online?obj={0}&page=doc&id={1}'.format(hosp_id, doc_id), verify=False)
     if not data.ok:
         abort(400, "Ошибка загрузки страницы")
     soup = BeautifulSoup(data.text, 'html.parser')
@@ -476,8 +476,8 @@ def tickets_view():
     cookies = check_igis_login(hosp_id, autouser)
     if cookies:
         data = requests.get(
-            'http://igis.ru/online?obj={0}}'.format(hosp_id),
-            cookies=cookies)
+            'https://igis.ru/online?obj={0}}'.format(hosp_id),
+            cookies=cookies, verify=False)
         if not data.ok:
             abort(400, "Ошибка загрузки страницы")
     else:
@@ -583,3 +583,7 @@ def main():
 
 def cgi():
     run(server='cgi', debug=True)
+
+
+if __name__ == '__main__':
+    main()

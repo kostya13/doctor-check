@@ -23,7 +23,7 @@ class Telegram:
     def _get_updates(self, offset=None, timeout=30):
         method = 'getUpdates'
         params = {'timeout': timeout, 'offset': offset}
-        resp = requests.get(self.api_url + method, params)
+        resp = requests.get(self.api_url + method, params, verify=False)
         result_json = resp.json()['result']
         result_json.reverse()
         return result_json
@@ -61,7 +61,7 @@ class Igis:
                                     'obj': hospital_id,
                                     'f': surname,
                                     'p': polis,
-                                    'rnd': RND})
+                                    'rnd': RND}, verify=False)
         if data.ok:
             if 'Ошибка авторизации' in data.text.encode('utf-8'):
                 return None
@@ -74,8 +74,8 @@ class Igis:
     @staticmethod
     def subscribe(ticket_info, cookies):
         zapis = requests.get(
-            "http://igis.ru{0}&zapis=1&rnd={1}'".format(ticket_info, RND),
-            cookies=cookies)
+            "https://igis.ru{0}&zapis=1&rnd={1}'".format(ticket_info, RND),
+            cookies=cookies, verify=False)
         if zapis.ok:
             if 'У вас уже есть номерок' in zapis.text.encode('utf-8'):
                 logger.error("У вас уже есть номерок к данной специальности")
@@ -93,7 +93,7 @@ class Sms:
         data = requests.get('https://sms.ru/sms/my/free',
                             params={
                                 'api_id': api_id,
-                                'json': 1})
+                                'json': 1}, verify=False)
         if data.ok:
             reply = json.loads(data.text)
             if not reply['used_today']:
@@ -119,7 +119,7 @@ class Sms:
                                 'to': tel,
                                 'msg': "{0}".format(message),
                                 'json': 1,
-                                'test': SMS_TEST})
+                                'test': SMS_TEST}, verify=False)
         if data.ok:
             reply = json.loads(data.text)
             if reply['sms'][tel]['status'] == 'ERROR':
