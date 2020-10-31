@@ -1,3 +1,4 @@
+#!/usr/bin/env python3 
 # -*- coding: utf-8 -*-
 import json
 import logging
@@ -118,7 +119,7 @@ def main():
             for user in all_doctors[doc_id]['subscriptions'].keys():
                 user_dict = all_doctors[doc_id]['subscriptions'][user]
                 doctor_name = all_doctors[doc_id]['name']
-                message = '{0} https://dv.kx13.ru/doctor/{1}/{2}'.\
+                message = '{0} https://dc.kx13.ru/doctor/{1}/{2}'.\
                     format(doctor_name, hosp_id, doc_id)
                 logger.debug("Пользователь: {0}".format(json.dumps(
                     user_dict, ensure_ascii=False)))

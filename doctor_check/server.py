@@ -1,6 +1,7 @@
+#!/usr/bin/env python3 
 # -*- coding: utf-8 -*-
 from bottle import route, run, template, abort, request, response, redirect
-import requests
+import requests 
 from bs4 import BeautifulSoup
 from collections import OrderedDict
 from doctor_check.services import Igis
@@ -59,7 +60,7 @@ not_autorized_page = html.format("""
 index_page = html.format("""
 <table>
     <tr>
-        <td><img src="ждун.png"></td>
+        <td><img src="waiter.png"></td>
         <td><h1>Номеркождун:<br> {{username}}</h1></td>
     </tr>
 </table>
@@ -286,7 +287,7 @@ def check_login(f):
             if request.path == '/':
                 redirect("/login")
             else:
-                redirect("/login?{0}".format(request.path))
+                redirect("/login{0}".format(request.path))
     return decorated
 
 
@@ -322,7 +323,7 @@ def get_auto_users():
 
 @route('/login')
 def login():
-    qkeys = request.query.keys()
+    qkeys = list(request.query.keys())
     return template(login_page, referer=qkeys[0] if qkeys else '/')
 
 
@@ -360,7 +361,7 @@ def categories(index):
     if data.ok:
         soup = BeautifulSoup(data.text, 'html.parser')
         images = [i.attrs['style'].split(' ')[1][4:-1]
-                  for i in soup.find_all('div', class_='hide-sm')[2:]]
+                  for i in soup.find_all('div', class_='hide-sm')[1:]]
         links = [(i.attrs['href'][5:], i.b.text)
                  for i in soup.find_all('a') if i.attrs.get('href')
                  and 'obj=' in i.attrs['href']]
@@ -586,4 +587,5 @@ def cgi():
 
 
 if __name__ == '__main__':
+    #cgi()
     main()
