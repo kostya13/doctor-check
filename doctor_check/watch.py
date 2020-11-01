@@ -11,7 +11,7 @@ from filelock import FileLock
 
 from doctor_check import (LOCK_FILE, SUBSCRIPTIONS,
                           load_file, save_file, registered_users,
-                          find_available_tickets, TicketInfo)
+                          find_available_tickets, TicketInfo, format_date)
 from doctor_check.services import (Igis, Telegram, Viber)
 
 urllib3.disable_warnings()
@@ -94,7 +94,6 @@ def main():
     logger.debug("Проверяем")
     telegram = Telegram()
     viber = Viber()
-    telegram.check_users(registered_users())
     subscriptions = load_file(SUBSCRIPTIONS)
     cleanup = []
     for hosp_id, hosp_info in subscriptions.items():
@@ -116,7 +115,7 @@ def main():
             for user in all_doctors[doc_id]['subscriptions'].keys():
                 user_dict = all_doctors[doc_id]['subscriptions'][user]
                 doctor_name = all_doctors[doc_id]['name']
-                message = '{0} https://dc.kx13.ru/doctor/{1}/{2}'.\
+                message = '{0} \n https://dc.kx13.ru/doctor/{1}/{2} \n https://igis.ru/online?obj={1}&page=doc&id={2}'.\
                     format(doctor_name, hosp_id, doc_id)
                 logger.debug("Пользователь: {0}".format(json.dumps(
                     user_dict, ensure_ascii=False)))
@@ -139,8 +138,8 @@ def main():
                         if auto_subscribe(autouser, polis, hosp_id, ticket):
                             ticket_date = ticket.split('&')[2][2:]
                             ticket_time = ticket.split('&')[3][2:]
-                            ticket_date = '{}-{}-{}'.format(ticket_date[:4],ticket_date[4:6], ticket_date[6:])
-                            message = 'Записан: {0} {1} {2}'.\
+                            ticket_date = format_date(ticket_date)
+                            message = 'Записан: {0} {1} \n {2}'.\
                                 format(ticket_date, ticket_time, message)
                         else:
                             message = 'Ошибка автозаписи: {0}'.format(message)

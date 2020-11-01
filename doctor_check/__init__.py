@@ -12,6 +12,9 @@ LOCK_FILE = 'subscriptions.lock'
 MESSENGERS_FILE = 'messengers.json'
 
 
+def format_date(date):
+    return '{}-{}-{}'.format(date[:4], date[4:6], date[6:])
+
 def load_file(filename):
     try:
         with open(filename, encoding='utf8') as f:

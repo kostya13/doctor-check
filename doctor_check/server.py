@@ -8,7 +8,7 @@ from doctor_check.services import Igis, Viber, Telegram
 from viberbot.api.viber_requests import ViberMessageRequest
 from doctor_check import (SUBSCRIPTIONS, AUTH_FILE, LOCK_FILE,
                           load_file, save_file, find_available_tickets,
-                          TicketInfo)
+                          TicketInfo, format_date)
 from filelock import FileLock
 from collections import namedtuple
 
@@ -52,6 +52,12 @@ html = """
 """
 
 login_page = html.format("""
+<table>
+    <tr>
+        <td><img src="waiter.png"></td>
+        <td><h1>Номеркождун ждет входа</h1></td>
+    </tr>
+</table>
 <form action="/login" method="post">
     Имя: <input name="name" type="text" />
     Пароль: <input name="password" type="password" />
@@ -226,8 +232,14 @@ categories_page = html.format("""
                {{item[2]}}<br>
                 <form action='/tickets' method="post">
                     <input type="hidden" name="hosp_name" value="{{item[1][1]}}">
-                    <input type="hidden" name="hosp_id" value="{item[1][0]{}}">
-                    <input type="submit" value="Посмотреть номерки">
+                    <input type="hidden" name="hosp_id" value="{{item[1][0]}}">
+                    <input type="hidden" name="category" value="{{category}}">
+                    <select name="autouser">
+                        <option value="">-----</option>
+                        % for user in autousers:
+                        <option value="{{user}}">{{user}}</option>
+                        % end
+                    <input type="submit" value="Посмотреть существующие записи">
                     </form>
         </tr>
         </table>
@@ -276,6 +288,10 @@ unsubscribed_page = html.format("""
 tickets_view_page = html.format("""
 <h1>{{hosp_name}}</h1>
 <h2>Пациент: {{name}}</h2>
+<br>
+<a href='/category/{{category}}'>Назад</a>
+<br>
+<a href='/'>На главную</a>
 """)
 
 
@@ -291,7 +307,7 @@ def check_login(f):
             if request.path == '/':
                 redirect("/login")
             else:
-                redirect("/login{0}".format(request.path))
+                redirect("/login?   {0}".format(request.path))
     return decorated
 
 
@@ -316,6 +332,7 @@ def check_igis_login(hospital_id, autouser):
     surename = autouser.split(' ')[0]
     auth_info = load_file(AUTH_FILE)
     polis = auth_info[user]['auth'][autouser]
+    logger.info(f'{hospital_id}, {surename}, {polis}')
     return Igis.login(hospital_id, surename, polis)
 
 
@@ -372,7 +389,9 @@ def categories(index):
         address = [i.text for i in soup.find_all('div')
                    if i.attrs.get('style')
                    and 'padding:10px 0 0 0;' in i.attrs['style']]
-        return template(categories_page, name=zip(images, links, address))
+        autousers = get_auto_users()
+        return template(categories_page, name=zip(images, links, address), category=index,
+                        autousers=autousers)
     else:
         abort(400, "Какая-то ошибка")
 
@@ -443,20 +462,21 @@ def get_ticket():
     if not autouser:
         return template(
             subscribe_error,
-            message="Невозмоно получить номерок. Нет указана фамилия",
+            message="Невозможно получить номерок. Не указана фамилия",
             referer=referer)
     cookies = check_igis_login(hosp_id, autouser)
     if cookies:
         if Igis.subscribe(ticket, cookies):
             ticket_date = ticket.split('&')[2][2:]
+
             ticket_time = ticket.split('&')[3][2:]
-            message = 'Номерок: {0} {1}'.format(ticket_date, ticket_time)
+            message = 'Номерок: {0} {1}'.format(format_date(ticket_date), ticket_time)
             return template(get_ticket_page, name=doc_name,
                             message=message, referer=referer)
         else:
             return template(
                 subscribe_error,
-                message="Невозмоно получить номерок. Возможно вы уже записаны.",
+                message="Невозмонжо получить номерок. Возможно вы уже записаны.",
                 referer=referer)
     else:
         return template(subscribe_error, message="Невозможно авторизоваться",
@@ -469,17 +489,18 @@ def tickets_view():
     referer = request.headers.get('Referer')
     hosp_id = request.forms.hosp_id
     hosp_name = request.forms.hosp_name
+    category = request.forms.category
     autouser = request.forms.autouser
     name = 'name'
     if not autouser:
         return template(
             subscribe_error,
-            message="Невозмоно получить номерок. Нет указана фамилия",
+            message="Невозмжоно получить номерок. Нет указана фамилия",
             referer=referer)
     cookies = check_igis_login(hosp_id, autouser)
     if cookies:
         data = requests.get(
-            'https://igis.ru/online?obj={0}}'.format(hosp_id),
+            'https://igis.ru/online?obj={0}'.format(hosp_id),
             cookies=cookies, verify=False)
         if not data.ok:
             abort(400, "Ошибка загрузки страницы")
@@ -487,7 +508,7 @@ def tickets_view():
         return template(subscribe_error, message="Невозможно авторизоваться",
                         referer=referer)
     soup = BeautifulSoup(data.text, 'html.parser')
-    return template(tickets_view_page, hosp_name=hosp_name, name=name)
+    return template(tickets_view_page, hosp_name=hosp_name, name=autouser, category=category)
 
 
 @route('/subscriptions')
