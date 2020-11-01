@@ -4,12 +4,21 @@ from bottle import route, run, template, abort, request, response, redirect
 import requests 
 from bs4 import BeautifulSoup
 from collections import OrderedDict
-from doctor_check.services import Igis
+from doctor_check.services import Igis, Viber, Telegram
+from viberbot.api.viber_requests import ViberMessageRequest
 from doctor_check import (SUBSCRIPTIONS, AUTH_FILE, LOCK_FILE,
                           load_file, save_file, find_available_tickets,
                           TicketInfo)
 from filelock import FileLock
 from collections import namedtuple
+
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler('/home/u63341pyl/domains/kx13.ru/public_html/dc/server.log', encoding='utf-8')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 DocInfo = namedtuple('DocInfo', 'name url user')
 
@@ -218,11 +227,6 @@ categories_page = html.format("""
                 <form action='/tickets' method="post">
                     <input type="hidden" name="hosp_name" value="{{item[1][1]}}">
                     <input type="hidden" name="hosp_id" value="{item[1][0]{}}">
-                    <select name="autouser">
-                        <option value="">-----</option>
-                        % for user in autousers:
-                        <option value="{{user}}">{{user}}</option>
-                        % end
                     <input type="submit" value="Посмотреть номерки">
                     </form>
         </tr>
@@ -368,8 +372,7 @@ def categories(index):
         address = [i.text for i in soup.find_all('div')
                    if i.attrs.get('style')
                    and 'padding:10px 0 0 0;' in i.attrs['style']]
-        return template(categories_page, name=zip(images, links, address),
-                        autousers=get_auto_users())
+        return template(categories_page, name=zip(images, links, address))
     else:
         abort(400, "Какая-то ошибка")
 
@@ -458,7 +461,6 @@ def get_ticket():
     else:
         return template(subscribe_error, message="Невозможно авторизоваться",
                         referer=referer)
-
 
 
 @route('/tickets', method='POST')
@@ -578,6 +580,27 @@ def unsubscribe():
     return template(unsubscribed_page, name=doc_name)
 
 
+@route('/viber', method='POST')
+def incoming():
+    viber = Viber()
+    logger.debug("Viber endpoint")
+
+    data = request.body.read()
+    if not viber.api.verify_signature(data, request.headers.get('X-Viber-Content-Signature')):
+        return abort(403)
+    viber_request = viber.api.parse_request(data)
+    if isinstance(viber_request, ViberMessageRequest):
+        viber.check_users(viber_request)
+
+
+@route('/telegram', method='POST')
+def incoming():
+    telegram = Telegram()
+    logger.debug("Telegram endpoint ")
+    data = request.json
+    telegram.check_users(data)
+
+
 def main():
     run(host='localhost', port=8000, reloader=True, debug=True)
 
@@ -587,5 +610,5 @@ def cgi():
 
 
 if __name__ == '__main__':
-    #cgi()
-    main()
+    cgi()
+    #main()

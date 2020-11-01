@@ -9,10 +9,10 @@ import urllib3
 from bs4 import BeautifulSoup
 from filelock import FileLock
 
-from doctor_check import (AUTH_FILE, LOCK_FILE, SUBSCRIPTIONS,
-                          load_file, save_file,
+from doctor_check import (LOCK_FILE, SUBSCRIPTIONS,
+                          load_file, save_file, registered_users,
                           find_available_tickets, TicketInfo)
-from doctor_check.services import (Igis, Telegram)
+from doctor_check.services import (Igis, Telegram, Viber)
 
 urllib3.disable_warnings()
 
@@ -93,11 +93,8 @@ def delete_completed(cleanup):
 def main():
     logger.debug("Проверяем")
     telegram = Telegram()
-    auth_info = load_file(AUTH_FILE)
-    if not auth_info:
-        logger.error('Невозможно загрузить файл с реквизитами')
-        quit(1)
-    telegram.check_users(auth_info.keys())
+    viber = Viber()
+    telegram.check_users(registered_users())
     subscriptions = load_file(SUBSCRIPTIONS)
     cleanup = []
     for hosp_id, hosp_info in subscriptions.items():
@@ -148,6 +145,7 @@ def main():
                         else:
                             message = 'Ошибка автозаписи: {0}'.format(message)
                 telegram.send(user, message)
+                viber.send(user, message)
                 cleanup.append(Cleanup(hosp_id, doc_id, user))
     delete_completed(cleanup)
 

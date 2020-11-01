@@ -4,13 +4,12 @@ import codecs
 import time
 import datetime
 
-__version__ = '1.0'
+__version__ = '1.1'
 
-EMAILCONFIG = 'email.json'
 SUBSCRIPTIONS = 'subscriptions.json'
 AUTH_FILE = 'auth.json'
 LOCK_FILE = 'subscriptions.lock'
-TELEGRAM_FILE = 'telegram.json'
+MESSENGERS_FILE = 'messengers.json'
 
 
 def load_file(filename):
@@ -34,6 +33,14 @@ def find_available_tickets(soup):
              if button.attrs['href'].startswith('javascript:winbox')]
     hrefs.sort(key=lambda x: x.split(b'&')[2])
     return hrefs
+
+
+def registered_users():
+    auth_info = load_file(AUTH_FILE)
+    if not auth_info:
+        logger.error('Невозможно загрузить файл с реквизитами')
+        quit(1)
+    return auth_info.keys()
 
 
 class TicketInfo:
