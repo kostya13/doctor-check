@@ -9,5 +9,5 @@ bot_configuration = BotConfiguration(
 	auth_token=VIBER_TOKEN
 )
 viber = Api(bot_configuration)
-res = viber.set_webhook('https://dc.kx13.ru:443/viber')
+res = viber.set_webhook('https://doctor.kx13.ru:443/viber')
 print(res)

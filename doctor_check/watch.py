@@ -115,7 +115,7 @@ def main():
             for user in all_doctors[doc_id]['subscriptions'].keys():
                 user_dict = all_doctors[doc_id]['subscriptions'][user]
                 doctor_name = all_doctors[doc_id]['name']
-                message = '{0} \n https://dc.kx13.ru/doctor/{1}/{2} \n https://igis.ru/online?obj={1}&page=doc&id={2}'.\
+                message = '{0} \n https://doctor.kx13.ru/doctor/{1}/{2} \n https://igis.ru/online?obj={1}&page=doc&id={2}'.\
                     format(doctor_name, hosp_id, doc_id)
                 logger.debug("Пользователь: {0}".format(json.dumps(
                     user_dict, ensure_ascii=False)))

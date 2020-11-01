@@ -15,7 +15,7 @@ from collections import namedtuple
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-handler = logging.FileHandler('/home/u63341pyl/domains/kx13.ru/public_html/dc/server.log', encoding='utf-8')
+handler = logging.FileHandler('/home/u63341pyl/domains/kx13.ru/public_html/doctor/server.log', encoding='utf-8')
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -38,8 +38,9 @@ html = """
     body {{
       line-height: 1.5;
       background-color: #BEF7F5;}}
-     ul li {{
-      margin-top: 20px;}}
+     ul li {{ margin-top: 20px;}}
+     a.main {{margin-left: 40px;
+              font-size: large}}
   </style>
   <script>
   //Здесь можно вставить скрипт
@@ -76,13 +77,13 @@ index_page = html.format("""
 <table>
     <tr>
         <td><img src="waiter.png"></td>
-        <td><h1>Номеркождун:<br> {{username}}</h1></td>
+        <td><h1>Номеркождун: {{username}}</h1></td>
     </tr>
 </table>
-<a href='category/1'>Взрослые больницы</a><br>
-<a href='category/2'>Детские больницы</a><br>
-<a href='category/3'>Стоматологии</a><br>
-<a href='category/4'>Диспансеры и спецучереждения</a>
+<a href='category/1' class='main'>Взрослые больницы</a><br>
+<a href='category/2' class='main'>Детские больницы</a><br>
+<a href='category/3' class='main'>Стоматологии</a><br>
+<a href='category/4' class='main'>Диспансеры и спецучереждения</a>
 <br><br>
 <b><a href='subscriptions'>Текущие подписки</a></b>
 <br><br>
