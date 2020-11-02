@@ -31,11 +31,16 @@ def parse_chat_message(transport, chat_id, msg):
             if messengers_config.get(user):
                 if messengers_config[user].get(transport.NAME):
                     transport.send(user, 'Вы уже зарегистрированы')
+                else:
+                    messengers_config[user][transport.NAME] = chat_id
+                    save_file(MESSENGERS_FILE, messengers_config)
+                    transport.send(user, "Вы добавлены в список рассылки")
             else:
                 messengers_config.setdefault(user, {})
                 messengers_config[user][transport.NAME] = chat_id
-                transport.send(user, "Вы добавлены в список рассылки")
                 save_file(MESSENGERS_FILE, messengers_config)
+                transport.send(user, "Вы добавлены в список рассылки")
+
         else:
             transport._send_message(chat_id, "Вы не зарегистированы в системе")
 

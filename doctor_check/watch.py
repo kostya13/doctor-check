@@ -9,7 +9,7 @@ import urllib3
 from bs4 import BeautifulSoup
 from filelock import FileLock
 
-from doctor_check import (LOCK_FILE, SUBSCRIPTIONS,
+from doctor_check import (LOCK_FILE, AUTH_FILE, SUBSCRIPTIONS,
                           load_file, save_file, registered_users,
                           find_available_tickets, TicketInfo, format_date)
 from doctor_check.services import (Igis, Telegram, Viber)
@@ -134,6 +134,7 @@ def main():
                         continue
                     ticket = ticket.decode()
                     if autouser:
+                        auth_info = load_file(AUTH_FILE)
                         polis = auth_info[user]['auth'].get(autouser)
                         if auto_subscribe(autouser, polis, hosp_id, ticket):
                             ticket_date = ticket.split('&')[2][2:]
