@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from filelock import FileLock
 
 from doctor_check import (LOCK_FILE, AUTH_FILE, SUBSCRIPTIONS,
-                          load_file, save_file, registered_users,
+                          load_file, save_file,
                           find_available_tickets, TicketInfo, format_date)
 from doctor_check.services import (Igis, Telegram, Viber)
 
@@ -28,8 +28,8 @@ FRIDAY = 4
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
                     level=logging.INFO)
 # level=logging.INFO, filename='watch.log')
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
 
 
 def is_anytime(fromtime, totime):

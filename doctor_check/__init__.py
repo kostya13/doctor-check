@@ -1,33 +1,144 @@
 # -*- coding: utf-8 -*-
-import json
 import codecs
-import time
+from collections import namedtuple
 import datetime
+import json
+import logging
+import os
+import time
+from requests.cookies import RequestsCookieJar
 
-__version__ = '1.1'
+from filelock import FileLock
 
-SUBSCRIPTIONS = 'subscriptions.json'
-AUTH_FILE = 'auth.json'
-LOCK_FILE = 'subscriptions.lock'
-MESSENGERS_FILE = 'messengers.json'
+__version__ = '1.2'
+HOST = 'https://doctor.kx13.ru'
+
+TEST = os.environ.get('TEST')
+
+logger = logging.getLogger()
+if TEST:
+    handler = logging.StreamHandler()
+    logger.setLevel(logging.DEBUG)
+else:
+    handler = logging.FileHandler('/home/u63341pyl/domains/kx13.ru/public_html/doctor/server.log', encoding='utf-8')
+    logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s - %(lineno)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+
+DocInfo = namedtuple('DocInfo', 'name url user')
+
+DAYS_MAP = {'0': 'Понедельник',
+            '1': 'Вторник',
+            '2': 'Среда',
+            '3': 'Четверг',
+            '4': 'Пятница'}
 
 
 def format_date(date):
     return '{}-{}-{}'.format(date[:4], date[4:6], date[6:])
 
-def load_file(filename):
-    try:
-        with open(filename, encoding='utf8') as f:
-            content = json.load(f)
-    except (IOError, ValueError) as e:
-        print(e)
-        content = {}
-    return content
+
+class ConfigFile:
+    def __init__(self, filename):
+        self.filename = filename
+        self.lock_file = filename + '.lock'
+        self.file_lock = FileLock(self.lock_file)
+        self.db = {}
+
+    def load(self):
+        if self.file_lock.is_locked:
+            raise RuntimeError('Нельзя использвать на заблокированных файлах')
+        else:
+            with self.file_lock:
+                return self._load_file()
+
+    def _load_file(self):
+        try:
+            with open(self.filename, encoding='utf8') as f:
+                self.db = json.load(f)
+        except FileNotFoundError:
+            self.db = {}
+        except Exception as e:
+            logger.error(e)
+            self.file_lock.release()
+            raise
 
 
-def save_file(filename, content):
-    with codecs.open(filename, 'w', encoding='utf8') as f:
-        json.dump(content, f, ensure_ascii=False, indent=2)
+    def _save_file(self):
+        with codecs.open(self.filename, 'w', encoding='utf8') as f:
+            json.dump(self.db, f, ensure_ascii=False, indent=2)
+
+    def _check_locked(self):
+        if not self.file_lock.is_locked:
+            raise RuntimeError('Нельзя использвать без блокировки')
+
+    def __enter__(self):
+        self.file_lock.acquire()
+        self._load_file()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type:
+            logger.error(f'{exc_type} {exc_value} {traceback}')
+        else:
+            self._save_file()
+        self.file_lock.release()
+        return None
+
+
+class AuthFile(ConfigFile):
+    """Конфигурация аутентификации в формате {login: password,...}"""
+    def __init__(self):
+        super().__init__('auth.json')
+
+    def registered_users(self):
+        self._check_locked()
+        return list(self.db.keys())
+
+class CookiesFile(ConfigFile):
+    """Файл с печеньками для уже зарегистированных пользвоателей на igis
+     используется, чтобы уменьшить количество логинов в систему igis
+    в формате {login: {autouser: cookie,...},...}"""
+    def __init__(self):
+        super().__init__('cookies.json')
+
+    def get(self, user, hospital_id, autouser):
+        self._check_locked()
+        cookie_dict = self.db.get(user, {}).get(hospital_id, {}).get(autouser)
+        if cookie_dict:
+            c = RequestsCookieJar()
+            c.update(cookie_dict)
+            return c
+
+
+    def set(self, user, autouser, hospital_id, cookie):
+        self._check_locked()
+        self.db.setdefault(user, {}).setdefault(hospital_id, {}).setdefault(autouser, cookie.get_dict())
+        pass
+
+class PatientsFile(ConfigFile):
+    """Конфигурация пациентов с полисами. Для каждого зарегистрированого пользователя
+    может быть несколько пациентов в формате
+    {login: {"фамилия имя": "номер полиса", ...}}
+    """
+    def __init__(self):
+        super().__init__('patients.json')
+
+    def get_names(self, user):
+        self._check_locked()
+        return list(self.db[user].keys())
+
+
+class MessengersFile(ConfigFile):
+    """Конфигурации мессенджеров для пользователей в формате
+    {login: {"viber": "chat_id",
+            {"telegram": "chat_id"}
+    """
+    def __init__(self):
+        super().__init__('messengers.json')
 
 
 def find_available_tickets(soup):
@@ -36,14 +147,6 @@ def find_available_tickets(soup):
              if button.attrs['href'].startswith('javascript:winbox')]
     hrefs.sort(key=lambda x: x.split(b'&')[2])
     return hrefs
-
-
-def registered_users():
-    auth_info = load_file(AUTH_FILE)
-    if not auth_info:
-        logger.error('Невозможно загрузить файл с реквизитами')
-        quit(1)
-    return auth_info.keys()
 
 
 class TicketInfo:
