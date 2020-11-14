@@ -9,9 +9,7 @@ import urllib3
 from bs4 import BeautifulSoup
 from filelock import FileLock
 
-from doctor_check import (LOCK_FILE, AUTH_FILE, SUBSCRIPTIONS,
-                          load_file, save_file,
-                          find_available_tickets, TicketInfo, format_date)
+from doctor_check import (find_available_tickets, TicketInfo, format_date, SubscriptionsFile)
 from doctor_check.services import (Igis, Telegram, Viber)
 
 urllib3.disable_warnings()
@@ -78,8 +76,8 @@ def auto_subscribe(autouser, polis, hosp_id, ticket):
 
 
 def delete_completed(cleanup):
-    with FileLock(LOCK_FILE):
-        subscriptions_reloaded = load_file((SUBSCRIPTIONS))
+    with SubscriptionsFile() as subsdb:
+        subscriptions_reloaded = subsdb.db
         for c in cleanup:
             doctors = subscriptions_reloaded[c.hosp_id]['doctors']
             del doctors[c.doc_id]['subscriptions'][c.user]
@@ -87,66 +85,66 @@ def delete_completed(cleanup):
                 del doctors[c.doc_id]
             if not doctors:
                 del subscriptions_reloaded[c.hosp_id]
-        save_file((SUBSCRIPTIONS), subscriptions_reloaded)
 
 
 def main():
     logger.debug("Проверяем")
     telegram = Telegram()
     viber = Viber()
-    subscriptions = load_file(SUBSCRIPTIONS)
-    cleanup = []
-    for hosp_id, hosp_info in subscriptions.items():
-        data = requests.get(
-            'https://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id), verify=False)
-        if not data.ok:
-            logger.error("Ошибка загрузки: {0}".format(data.text))
-            break
-        soup = BeautifulSoup(data.text, 'html.parser')
-        all_doctors = hosp_info['doctors']
-        doctors_list = [c for c in soup.find_all('table')[5].children
-                        if 'Всего номерков' in str(c)]
-        for c in doctors_list:
-            href = c.find_all('a')[1].attrs['href']
-            doc_id = href.split('&')[2][3:]
-            if doc_id not in all_doctors.keys():
-                continue
-            logger.debug("Найдено совпадение: {0}".format(href))
-            for user in all_doctors[doc_id]['subscriptions'].keys():
-                user_dict = all_doctors[doc_id]['subscriptions'][user]
-                doctor_name = all_doctors[doc_id]['name']
-                message = '{0} \n https://doctor.kx13.ru/doctor/{1}/{2} \n https://igis.ru/online?obj={1}&page=doc&id={2}'.\
-                    format(doctor_name, hosp_id, doc_id)
-                logger.debug("Пользователь: {0}".format(json.dumps(
-                    user_dict, ensure_ascii=False)))
-                fromtime = user_dict['fromtime']
-                totime = user_dict['totime']
-                fromweekday = int(user_dict['fromweekday'])
-                toweekday = int(user_dict['toweekday'])
-                autouser = user_dict['autouser']
-                always = (is_anytime(fromtime, totime) and
-                          is_allweek(fromweekday, toweekday))
-                if not always or autouser:
-                    ticket = find_ticket(fromtime, totime, href,
-                                        fromweekday, toweekday)
-                    if not ticket:
-                        logger.debug("Нет подходящих номерков")
-                        continue
-                    ticket = ticket.decode()
-                    if autouser:
-                        auth_info = load_file(AUTH_FILE)
-                        polis = auth_info[user]['auth'].get(autouser)
-                        if auto_subscribe(autouser, polis, hosp_id, ticket):
-                            ticket_date = ticket.split('&')[2][2:]
-                            ticket_time = ticket.split('&')[3][2:]
-                            ticket_date = format_date(ticket_date)
-                            message = 'Записан: {0} {1} \n {2}'.\
-                                format(ticket_date, ticket_time, message)
-                        else:
-                            message = 'Ошибка автозаписи: {0}'.format(message)
-                telegram.send(user, message)
-                viber.send(user, message)
-                cleanup.append(Cleanup(hosp_id, doc_id, user))
+    with SubscriptionsFile() as subsdb:
+        subscriptions = subsdb.db
+        cleanup = []
+        for hosp_id, hosp_info in subscriptions.items():
+            data = requests.get(
+                'https://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id), verify=False)
+            if not data.ok:
+                logger.error("Ошибка загрузки: {0}".format(data.text))
+                break
+            soup = BeautifulSoup(data.text, 'html.parser')
+            all_doctors = hosp_info['doctors']
+            doctors_list = [c for c in soup.find_all('table')[5].children
+                            if 'Всего номерков' in str(c)]
+            for c in doctors_list:
+                href = c.find_all('a')[1].attrs['href']
+                doc_id = href.split('&')[2][3:]
+                if doc_id not in all_doctors.keys():
+                    continue
+                logger.debug("Найдено совпадение: {0}".format(href))
+                for user in all_doctors[doc_id]['subscriptions'].keys():
+                    user_dict = all_doctors[doc_id]['subscriptions'][user]
+                    doctor_name = all_doctors[doc_id]['name']
+                    message = '{0} \n https://doctor.kx13.ru/doctor/{1}/{2} \n https://igis.ru/online?obj={1}&page=doc&id={2}'.\
+                        format(doctor_name, hosp_id, doc_id)
+                    logger.debug("Пользователь: {0}".format(json.dumps(
+                        user_dict, ensure_ascii=False)))
+                    fromtime = user_dict['fromtime']
+                    totime = user_dict['totime']
+                    fromweekday = int(user_dict['fromweekday'])
+                    toweekday = int(user_dict['toweekday'])
+                    autouser = user_dict['autouser']
+                    always = (is_anytime(fromtime, totime) and
+                              is_allweek(fromweekday, toweekday))
+                    if not always or autouser:
+                        ticket = find_ticket(fromtime, totime, href,
+                                            fromweekday, toweekday)
+                        if not ticket:
+                            logger.debug("Нет подходящих номерков")
+                            continue
+                        ticket = ticket.decode()
+                        if autouser:
+                            auth_info = load_file(AUTH_FILE)
+                            polis = auth_info[user]['auth'].get(autouser)
+                            if auto_subscribe(autouser, polis, hosp_id, ticket):
+                                ticket_date = ticket.split('&')[2][2:]
+                                ticket_time = ticket.split('&')[3][2:]
+                                ticket_date = format_date(ticket_date)
+                                message = 'Записан: {0} {1} \n {2}'.\
+                                    format(ticket_date, ticket_time, message)
+                            else:
+                                message = 'Ошибка автозаписи: {0}'.format(message)
+                    telegram.send(user, message)
+                    viber.send(user, message)
+                    cleanup.append(Cleanup(hosp_id, doc_id, user))
     delete_completed(cleanup)
 
 

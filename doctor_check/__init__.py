@@ -180,3 +180,22 @@ class TicketInfo:
     @property
     def link(self):
         return self.href.split(b',')[1][1:-1]
+
+class SubscriptionsFile(ConfigFile):
+    """Конфигурация активных подписок для ползователей
+    формат конфигурации
+    {"hosp_id": {"name": "название больницы",
+                 "doctors": { "doctor_id" :{
+                        "name": "ФИО доктора",
+                        "subscriptions": {
+                                  "login": {
+                                    "fromtime": "08",
+                                    "totime": "20",
+                                    "fromweekday": "0",
+                                    "toweekday": "4",
+                                    "autouser": "ФИ из patients.json"
+                                  }}
+                              }}}
+    """
+    def __init__(self):
+        super().__init__('subscriptions.json')

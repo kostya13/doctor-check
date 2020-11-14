@@ -63,11 +63,12 @@ class Telegram:
         parse_chat_message(self, chat_id, msg)
 
     def send(self, user, message):
-        config = load_file(MESSENGERS_FILE)
-        if config.get(user):
-            chat_id = config[user].get('telegram')
-            if chat_id:
-                self._send_message(chat_id, message)
+        with MessengersFile() as messengerdb:
+            config = messengerdb.db
+            if config.get(user):
+                chat_id = config[user].get('telegram')
+                if chat_id:
+                    self._send_message(chat_id, message)
 
 
 class Viber:
@@ -91,11 +92,12 @@ class Viber:
         parse_chat_message(self, chat_id, msg)
 
     def send(self, user, message):
-        config = load_file(MESSENGERS_FILE)
-        if config.get(user):
-            chat_id = config[user].get('viber')
-            if chat_id:
-                self._send_message(chat_id, message)
+        with MessengersFile() as messengerdb:
+            config = messengerdb.db
+            if config.get(user):
+                chat_id = config[user].get('viber')
+                if chat_id:
+                    self._send_message(chat_id, message)
 
 
 class Igis:

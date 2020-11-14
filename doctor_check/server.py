@@ -8,33 +8,11 @@ from bottle import route, run, template, abort, request, response, redirect
 from bs4 import BeautifulSoup
 from viberbot.api.viber_requests import ViberMessageRequest
 
-from doctor_check import (find_available_tickets, PatientsFile, CookiesFile, DocInfo, AuthFile,
-                          TicketInfo, format_date, ConfigFile, TEST, templates, DAYS_MAP)
+from doctor_check import (find_available_tickets, PatientsFile, CookiesFile, DocInfo, AuthFile, SubscriptionsFile,
+                          TicketInfo, format_date, TEST, templates, DAYS_MAP)
 from doctor_check.services import Igis, Viber, Telegram
 
 logger = logging.getLogger()
-
-
-
-
-class SubscriptionsFile(ConfigFile):
-    """Конфигурация активных подписок для ползователей
-    формат конфигурации
-    {"hosp_id": {"name": "название больницы",
-                 "doctors": { "doctor_id" :{
-                        "name": "ФИО доктора",
-                        "subscriptions": {
-                                  "login": {
-                                    "fromtime": "08",
-                                    "totime": "20",
-                                    "fromweekday": "0",
-                                    "toweekday": "4",
-                                    "autouser": "ФИ из patients.json"
-                                  }}
-                              }}}
-    """
-    def __init__(self):
-        super().__init__('subscriptions.json')
 
 
 def is_logined():
