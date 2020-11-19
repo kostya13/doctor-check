@@ -31,10 +31,10 @@ signup_page = html.format("""
     </tr>
 </table>
 {{message}}
-<form action="/signup" method="post">
-    Имя: <input name="name" type="text" />
-    Пароль:          <input name="password1" type="password" />
-    Повторте пароль: <input name="password2" type="password" />
+<form enctype="multipart/form-data" action="/signup" method="post">
+    Имя: <input name="name" type="text" /><br>
+    Пароль:          <input name="password1" type="password" /><br>
+    Повторте пароль: <input name="password2" type="password" /><br>
     <input value="Зарегистрироваться" type="submit" />
 </form>
 """)
