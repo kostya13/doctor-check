@@ -34,14 +34,15 @@ def parse_chat_message(transport, chat_id, msg):
                 if messengers_config[user].get(transport.NAME):
                     transport.send(user, 'Вы уже зарегистрированы')
                 else:
-                    messengers_config[user][transport.NAME] = chat_id
+                    with MessengersFile() as messengerdb:
+                        messengerdb.db[user][transport.NAME] = chat_id
                     transport.send(user, "Вы добавлены в список рассылки. Чтобы узнать свой логин и пароль"
                                    " отправьте в чат комманду /login")
             else:
-                messengers_config.setdefault(user, {})
-                messengers_config[user][transport.NAME] = chat_id
+                with MessengersFile() as messengerdb:
+                    messengerdb.db.setdefault(user, {})
+                    messengerdb.db[user][transport.NAME] = chat_id
                 transport.send(user, "Вы добавлены в список рассылки")
-
         else:
             transport._send_message(chat_id, "Вы не зарегистированы в системе")
 

@@ -129,7 +129,7 @@ class PatientsFile(ConfigFile):
 
     def get_names(self, user):
         self._check_locked()
-        return list(self.db[user].keys())
+        return list(self.db.get(user, {}).keys())
 
 
 class MessengersFile(ConfigFile):

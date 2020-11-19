@@ -46,14 +46,18 @@ def signup():
         message = "Пароли не совпадают"
     elif message == 'userexists':
         message = "Пользователь с этим именем уже существует"
+    elif message == 'nopassword':
+        message = "Пустой пароль"
     return template(templates.signup_page, message=message   )
 
 
 @route('/signup', method='POST')
 def do_signup():
-    name = request.forms.get('name').strip()
-    password1 = request.forms.get('password1')
-    password2 = request.forms.get('password2')
+    name = request.forms.name.strip()
+    password1 = request.forms.password1
+    password2 = request.forms.password2
+    if not password1:
+        redirect("/signup?" + 'msg=nopassword')
     with AuthFile() as auth:
         if name in auth.registered_users():
             redirect("/signup?" + 'msg=userexists')
@@ -79,9 +83,9 @@ def logout():
 
 @route('/login', method='POST')
 def do_login():
-    name = request.forms.get('name')
-    password = request.forms.get('password')
-    referer = request.forms.get('referer')
+    name = request.forms.name
+    password = request.forms.password
+    referer = request.forms.referer
     with AuthFile() as auth:
         if auth.db.get(name) == password:
             response.set_cookie("logined", name, secret='some-secret-key')
