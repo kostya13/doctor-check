@@ -19,31 +19,31 @@ def parse_chat_message(transport, chat_id, msg):
         users = auth.db
     with MessengersFile() as messengerdb:
         messengers_config = messengerdb.db
-        if msg == '/login':
-            for u in messengers_config.keys():
-                t_chat = messengers_config[u].get(transport.NAME)
-                if t_chat:
-                    transport.send(u, "Ваш логин: {}\nВаш пароль: {}".format(u, users[u]['password']))
-                    break
-            else:
-                transport._send_message(chat_id, "Вы не зарегистированы в системе")
+    if msg == '/login':
+        for u in messengers_config.keys():
+            t_chat = messengers_config[u].get(transport.NAME)
+            if t_chat:
+                transport.send(u, "Ваш логин: {}\nВаш пароль: {}".format(u, users[u]))
+                break
         else:
-            user = msg
-            if user in registered_users:
-                if messengers_config.get(user):
-                    if messengers_config[user].get(transport.NAME):
-                        transport.send(user, 'Вы уже зарегистрированы')
-                    else:
-                        messengers_config[user][transport.NAME] = chat_id
-                        transport.send(user, "Вы добавлены в список рассылки. Чтобы узнать свой логин и пароль"
-                                       " отправьте в чат комманду /login")
+            transport._send_message(chat_id, "Вы не зарегистированы в системе")
+    else:
+        user = msg
+        if user in registered_users:
+            if messengers_config.get(user):
+                if messengers_config[user].get(transport.NAME):
+                    transport.send(user, 'Вы уже зарегистрированы')
                 else:
-                    messengers_config.setdefault(user, {})
                     messengers_config[user][transport.NAME] = chat_id
-                    transport.send(user, "Вы добавлены в список рассылки")
-
+                    transport.send(user, "Вы добавлены в список рассылки. Чтобы узнать свой логин и пароль"
+                                   " отправьте в чат комманду /login")
             else:
-                transport._send_message(chat_id, "Вы не зарегистированы в системе")
+                messengers_config.setdefault(user, {})
+                messengers_config[user][transport.NAME] = chat_id
+                transport.send(user, "Вы добавлены в список рассылки")
+
+        else:
+            transport._send_message(chat_id, "Вы не зарегистированы в системе")
 
 
 class Telegram:
@@ -65,10 +65,10 @@ class Telegram:
     def send(self, user, message):
         with MessengersFile() as messengerdb:
             config = messengerdb.db
-            if config.get(user):
-                chat_id = config[user].get('telegram')
-                if chat_id:
-                    self._send_message(chat_id, message)
+        if config.get(user):
+            chat_id = config[user].get('telegram')
+            if chat_id:
+                self._send_message(chat_id, message)
 
 
 class Viber:
@@ -94,10 +94,10 @@ class Viber:
     def send(self, user, message):
         with MessengersFile() as messengerdb:
             config = messengerdb.db
-            if config.get(user):
-                chat_id = config[user].get('viber')
-                if chat_id:
-                    self._send_message(chat_id, message)
+        if config.get(user):
+            chat_id = config[user].get('viber')
+            if chat_id:
+                self._send_message(chat_id, message)
 
 
 class Igis:
@@ -112,11 +112,11 @@ class Igis:
         return cookie
 
     @staticmethod
-    def load_page(hospital_id, autouser, igis_page, referer=''):
+    def load_page(hospital_id, autouser, igis_page, referer='', user=None):
         def is_correct_reply(data):
             return data.ok and 'Ошибка авторизации' not in data.text
-
-        user = request.get_cookie("logined", secret='some-secret-key')
+        if not user:
+            user = request.get_cookie("logined", secret='some-secret-key')
         with PatientsFile() as patients:
             polis = patients.db[user][autouser]
         logger.debug(f'{hospital_id}, {autouser}, {polis}')
@@ -161,9 +161,9 @@ class Igis:
             return None
 
     @staticmethod
-    def subscribe(ticket_info, hospital_id, autouser, referer):
+    def subscribe(ticket_info, hospital_id, autouser, referer, user=None):
         igis_page=  "https://igis.ru{0}&zapis=1&rnd={1}'".format(ticket_info, RND)
-        zapis = Igis.load_page(hospital_id, autouser, igis_page, referer)
+        zapis = Igis.load_page(hospital_id, autouser, igis_page, referer, user)
         if zapis.ok:
             if 'У вас уже есть номерок' in zapis.text:
                 logger.error("У вас уже есть номерок к данной специальности")

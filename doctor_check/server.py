@@ -252,6 +252,7 @@ def subscriptions():
 @route('/subscribe', method='POST')
 @check_login
 def subscribe():
+    logger.debug('subscribe')
     doc_name = request.forms.doc_name
     doc_url = request.forms.doc_url
     hospital_name = request.forms.hospital_name
@@ -269,6 +270,7 @@ def subscribe():
                         message="Неправильно заданы дни недели",
                         referer=referer)
     autouser = request.forms.autouser
+    logger.debug(f'{hospital_name}, {doc_name}, {doc_url},  {fromtime}, {totime}')
     if not all([hospital_name, doc_name, doc_url,  fromtime, totime]):
         abort(400, "Некорректный запрос")
     hospital_id = _hospital_id(doc_url)
@@ -350,7 +352,7 @@ def main():
 
 
 def cgi():
-    run(server='cgi')
+    run(server='cgi', debug=True)
 
 
 if __name__ == '__main__':

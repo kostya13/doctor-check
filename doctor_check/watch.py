@@ -9,7 +9,7 @@ import urllib3
 from bs4 import BeautifulSoup
 from filelock import FileLock
 
-from doctor_check import (find_available_tickets, TicketInfo, format_date, SubscriptionsFile)
+from doctor_check import (find_available_tickets, TicketInfo, format_date, SubscriptionsFile, PatientsFile)
 from doctor_check.services import (Igis, Telegram, Viber)
 
 urllib3.disable_warnings()
@@ -57,7 +57,7 @@ def find_ticket(fromtime, totime, href, fromweekday, toweekday):
     return ''
 
 
-def auto_subscribe(autouser, polis, hosp_id, ticket):
+def auto_subscribe(user, autouser, polis, hosp_id, ticket):
     logger.debug("Автоматическая подписка")
     surename = autouser.split(' ')[0]
     if not polis:
@@ -65,7 +65,7 @@ def auto_subscribe(autouser, polis, hosp_id, ticket):
         return False
     cookies = Igis.login(hosp_id, surename, polis)
     if cookies:
-        if Igis.subscribe(ticket, cookies):
+        if Igis.subscribe(ticket, hosp_id, autouser, '', user):
             return True
         else:
             logger.debug("Ошибка автоматической подписки")
@@ -132,9 +132,10 @@ def main():
                             continue
                         ticket = ticket.decode()
                         if autouser:
-                            auth_info = load_file(AUTH_FILE)
-                            polis = auth_info[user]['auth'].get(autouser)
-                            if auto_subscribe(autouser, polis, hosp_id, ticket):
+                            with PatientsFile() as auth:
+                                auth_info = auth.db
+                                polis = auth_info[user].get(autouser)
+                            if auto_subscribe(user, autouser, polis, hosp_id, ticket):
                                 ticket_date = ticket.split('&')[2][2:]
                                 ticket_time = ticket.split('&')[3][2:]
                                 ticket_date = format_date(ticket_date)

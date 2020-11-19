@@ -21,7 +21,7 @@ if TEST:
     logger.setLevel(logging.DEBUG)
 else:
     handler = logging.FileHandler('/home/u63341pyl/domains/kx13.ru/public_html/doctor/server.log', encoding='utf-8')
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.ERROR)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s - %(lineno)s - %(message)s')
 handler.setFormatter(formatter)
@@ -76,7 +76,7 @@ class ConfigFile:
             raise RuntimeError('Нельзя использвать без блокировки')
 
     def __enter__(self):
-        self.file_lock.acquire()
+        self.file_lock.acquire(60)
         self._load_file()
         return self
 
