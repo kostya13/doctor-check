@@ -13,6 +13,7 @@ from doctor_check import (find_available_tickets, TicketInfo, format_date, Subsc
 from doctor_check.services import (Igis, Telegram, Viber)
 
 urllib3.disable_warnings()
+logger = logging.getLogger()
 
 
 Cleanup = namedtuple('Cleanup', "hosp_id, doc_id, user")
@@ -20,25 +21,17 @@ Cleanup = namedtuple('Cleanup', "hosp_id, doc_id, user")
 
 TIME_MIN = '08'
 TIME_MAX = '20'
-MONDAY = 0
-FRIDAY = 4
-
-logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s',
-                    level=logging.INFO)
-# level=logging.INFO, filename='watch.log')
-logger = logging.getLogger()
-logger.setLevel(logging.ERROR)
 
 
 def is_anytime(fromtime, totime):
     return fromtime == TIME_MIN and totime == TIME_MAX
 
 
-def is_allweek(fromweekday, toweekday):
-    return fromweekday == MONDAY and toweekday == FRIDAY
+def is_allweek(weekdays):
+    return len(weekdays) == 5
 
 
-def find_ticket(fromtime, totime, href, fromweekday, toweekday):
+def find_ticket(fromtime, totime, href, weekdays):
     data = requests.get(
         'https://igis.ru/online{0}'.format(href), verify=False)
     if not data.ok:
@@ -48,8 +41,7 @@ def find_ticket(fromtime, totime, href, fromweekday, toweekday):
     hrefs = find_available_tickets(soup)
     for href in hrefs:
         info = TicketInfo(href)
-        weekday = info.weekday
-        if weekday < fromweekday or weekday > toweekday:
+        if str(info.weekday) not in weekdays:
                 continue
         href_hours = info.time.split(b':')[0]
         if href_hours.decode() >= fromtime and href_hours.decode() <= totime:
@@ -119,14 +111,12 @@ def main():
                         user_dict, ensure_ascii=False)))
                     fromtime = user_dict['fromtime']
                     totime = user_dict['totime']
-                    fromweekday = int(user_dict['fromweekday'])
-                    toweekday = int(user_dict['toweekday'])
+                    weekdays = user_dict['weekdays']
                     autouser = user_dict['autouser']
                     always = (is_anytime(fromtime, totime) and
-                              is_allweek(fromweekday, toweekday))
+                              is_allweek(weekdays))
                     if not always or autouser:
-                        ticket = find_ticket(fromtime, totime, href,
-                                            fromweekday, toweekday)
+                        ticket = find_ticket(fromtime, totime, href, weekdays)
                         if not ticket:
                             logger.debug("Нет подходящих номерков")
                             continue
@@ -143,6 +133,7 @@ def main():
                                     format(ticket_date, ticket_time, message)
                             else:
                                 message = 'Ошибка автозаписи: {0}'.format(message)
+                    logger.debug(f'{user} {message}')
                     telegram.send(user, message)
                     viber.send(user, message)
                     cleanup.append(Cleanup(hosp_id, doc_id, user))

@@ -143,20 +143,12 @@ hospital_page = html.format("""
                 <option value="19">19</option>
                 <option selected="selected" value="20">20</option>
             </select>
-              День от:  <select name="fromweekday">
-                <option value="0">Понедельник</option>
-                <option value="1">Вторник</option>
-                <option value="2">Среда</option>
-                <option value="3">Четверг</option>
-                <option value="4">Пятница</option>
-            </select>
-              До дня недели:  <select name="toweekday">
-                <option value="0">Понедельник</option>
-                <option value="1">Вторник</option>
-                <option value="2">Среда</option>
-                <option value="3">Четверг</option>
-                <option selected="selected" value="4">Пятница</option>
-            </select>
+              Дни: 
+               <input type="checkbox" name="monday" value="0" checked>Понедельник &nbsp;
+               <input type="checkbox" name="tuesday" value="1" checked>Вторник &nbsp;
+               <input type="checkbox" name="wednesday" value="2" checked>Среда &nbsp;
+               <input type="checkbox" name="thursday" value="3" checked>Четверг &nbsp;
+               <input type="checkbox" name="friday" value="4" checked>Пятница &nbsp;
             Автоподписка <select name="autouser">
                 <option value="">-----</option>
                 % for user in autousers:
@@ -209,7 +201,11 @@ subscriptions_page = html.format("""
            <li><form action='/unsubscribe' method="post">
            <a href='http://igis.ru/online{{doc.url}}'>{{doc.name}}</a>
            {{doc.user['fromtime']}}:00 - {{doc.user['totime']}}:00
-           [{{dmap[doc.user['fromweekday']]}}-{{dmap[doc.user['toweekday']]}}]
+           [
+           % for day  in doc.user['weekdays']:
+           {{dmap[day]}}, 
+           % end
+           ]
            % if doc.user['autouser']:
                (Автозапись: {{doc.user['autouser']}})
            % end

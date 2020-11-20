@@ -262,19 +262,15 @@ def subscribe():
     hospital_name = request.forms.hospital_name
     fromtime = request.forms.fromtime
     totime = request.forms.totime
-    fromweekday = request.forms.fromweekday
-    toweekday = request.forms.toweekday
+    weekdays = [request.forms.get(d) for d in ("monday", "tuesday", "wednesday", "thursday", "friday")
+                if d in request.forms]
     referer = request.headers.get('Referer')
     if totime < fromtime:
         return template(templates.subscribe_error,
                         message="Время начала больше время окончания",
                         referer=referer)
-    if toweekday < fromweekday:
-        return template(templates.subscribe_error,
-                        message="Неправильно заданы дни недели",
-                        referer=referer)
     autouser = request.forms.autouser
-    logger.debug(f'{hospital_name}, {doc_name}, {doc_url},  {fromtime}, {totime}')
+    logger.debug(f'{hospital_name}, {doc_name}, {doc_url},  {fromtime}, {totime}, {weekdays}')
     if not all([hospital_name, doc_name, doc_url,  fromtime, totime]):
         abort(400, "Некорректный запрос")
     hospital_id = _hospital_id(doc_url)
@@ -290,8 +286,7 @@ def subscribe():
         user_info = subscriptions.setdefault(user, {})
         user_info['fromtime'] = fromtime
         user_info['totime'] = totime
-        user_info['fromweekday'] = fromweekday
-        user_info['toweekday'] = toweekday
+        user_info['weekdays'] = weekdays
         user_info['autouser'] = autouser
     if autouser:
         with PatientsFile() as patients:

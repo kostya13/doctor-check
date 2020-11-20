@@ -10,7 +10,7 @@ from requests.cookies import RequestsCookieJar
 
 from filelock import FileLock
 
-__version__ = '1.2'
+__version__ = '1.3'
 HOST = 'https://doctor.kx13.ru'
 
 TEST = os.environ.get('TEST')
