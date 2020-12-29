@@ -87,10 +87,14 @@ def main():
         subscriptions = subsdb.db
         cleanup = []
         for hosp_id, hosp_info in subscriptions.items():
-            data = requests.get(
-                'https://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id), verify=False)
-            if not data.ok:
-                logger.error("Ошибка загрузки: {0}".format(data.text))
+            try:
+                data = requests.get(
+                    'https://igis.ru/online?obj={0}&page=zapdoc'.format(hosp_id), verify=False)
+                if not data.ok:
+                    logger.error("Ошибка загрузки: {0}".format(data.text))
+                    break
+            except Exception as e:
+                logger.error('Connection fail {}'.format(e))
                 break
             soup = BeautifulSoup(data.text, 'html.parser')
             all_doctors = hosp_info['doctors']
