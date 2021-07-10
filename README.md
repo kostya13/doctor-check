@@ -8,6 +8,34 @@
 Сервис уведомления о свободной записи к врачу "Номеркождун"
 Сайт https://doctor.kx13.ru
 
+# Развертывание приложение на сайте justhost
+
+В панели Directadmin подраздел "Дополнительные опции" пункт "Setup Python App"
+Должно быть установлено хоть одно приложение.
+Если приложение будет в корневом домене, то можно настроить прямо там.
+Если сервис будет в домене третьего уровня, например "doctor.kx13.ru", 
+то дополнительную настройку надо проводить вручную
+
+Необходимо будет отредактировать .htaccess для нужного домена.
+Например содержимое файла:
+./domains/kx13.ru/public_html/doctor/.htaccess
+
+```buildoutcfg
+PassengerAppRoot "/home/u63341pyl/doctor"
+PassengerBaseURI "/"
+PassengerPython "/home/u63341pyl/virtualenv/kx13/3.7/bin/python3.7"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
+<IfModule Litespeed>
+</IfModule>
+```
+Путь `PassengerPython` должно указывать на виртуальное окружение,
+которое было настроено в разделе "Setup Python App".
+
+# Разработка и тестирование сервиса
+
+Для тестов и разработки надо запускать скрипт `wsgiserver.py`
+
 # Инструкция для пользователей
 
 * Передать администратору логин и пароль

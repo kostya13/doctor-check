@@ -1,15 +1,14 @@
-#!/usr/bin/env python3 
-# -*- coding: utf-8 -*-
 import logging
 from collections import OrderedDict
 
 import requests
+import bottle
 from bottle import route, run, template, abort, request, response, redirect
 from bs4 import BeautifulSoup
 from viberbot.api.viber_requests import ViberMessageRequest
 
 from doctor_check import (find_available_tickets, PatientsFile, CookiesFile, DocInfo, AuthFile, SubscriptionsFile,
-                          TicketInfo, format_date, TEST, templates, DAYS_MAP)
+                          TicketInfo, format_date, templates, DAYS_MAP)
 from doctor_check.services import Igis, Viber, Telegram
 
 logger = logging.getLogger()
@@ -259,7 +258,7 @@ def subscribe():
     logger.debug('subscribe')
     doc_name = request.forms.doc_name
     doc_url = request.forms.doc_url
-    hospital_name = request.forms.hospital_name
+    hospital_name = request.forms['hospital_name']
     fromtime = request.forms.fromtime
     totime = request.forms.totime
     weekdays = [request.forms.get(d) for d in ("monday", "tuesday", "wednesday", "thursday", "friday")
@@ -346,17 +345,4 @@ def incoming():
     telegram.check_users(data)
 
 
-def main():
-    run(host='localhost', port=8000, reloader=True, debug=True)
-
-
-def cgi():
-    run(server='cgi', debug=True)
-
-
-if __name__ == '__main__':
-    if TEST:
-        main()
-    else:
-        cgi()
-
+application = bottle.default_app()

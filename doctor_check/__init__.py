@@ -13,15 +13,12 @@ from filelock import FileLock
 __version__ = '1.3'
 HOST = 'https://doctor.kx13.ru'
 
-TEST = os.environ.get('TEST')
 
 logger = logging.getLogger()
-if TEST:
-    handler = logging.StreamHandler()
-    logger.setLevel(logging.DEBUG)
-else:
-    handler = logging.FileHandler('/home/u63341pyl/domains/kx13.ru/public_html/doctor/server.log', encoding='utf-8')
-    logger.setLevel(logging.ERROR)
+
+handler = logging.FileHandler(
+    os.path.join(os.path.dirname(__file__), '..', 'server.log'), encoding='utf-8')
+logger.setLevel(logging.ERROR)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s - %(lineno)s - %(message)s')
 handler.setFormatter(formatter)

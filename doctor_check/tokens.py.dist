@@ -1,0 +1,3 @@
+TELEGRAM_TOKEN = 'telegram-token-here'
+VIBER_TOKEN = 'viber-token-here'
+VIBER_NAME = 'Доктор ждун'
